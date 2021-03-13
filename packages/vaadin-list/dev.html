@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vaadin list proto</title>
+
+    <style>
+      html,
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        height: 100%;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <vaadin-list style="height: 100%; width: 100%"></vaadin-list>
+
+    <script type="module">
+      import './vaadin-list';
+      import { render, html } from 'lit-html';
+
+      const list = document.querySelector('vaadin-list');
+
+      // Assign an item renderer
+      list.renderer = (root, { item, index }) => {
+        render(
+          html`
+            <div style="display: flex; align-items: center">
+              <img style="height: 48px; width: 48px; padding: 5px; border-radius: 50%;" src=${item.picture.thumbnail} />
+
+              <div>
+                <b>${item.name.first} ${item.name.last}</b>
+                <br />
+                <span>Row index: ${index}</span>
+              </div>
+              <div></div>
+            </div>
+          `,
+          root
+        );
+      };
+
+      // Assign items
+      fetch('https://randomuser.me/api?results=1000')
+        .then((res) => res.json())
+        .then((people) => (list.items = people.results));
+    </script>
+  </body>
+</html>
