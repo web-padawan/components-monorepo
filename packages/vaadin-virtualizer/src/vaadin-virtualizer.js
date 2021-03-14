@@ -1,11 +1,37 @@
 import { ironList } from './iron-list';
 
-// TODO: _vidxOffset (= unlimited size, grid scroller feature)
-// TODO: Restore scroll position after size change (grid scroller feature)
 export class Virtualizer {
   constructor(config) {
+    this.__adapter = new IronListAdapter(config);
+  }
+
+  set size(size) {
+    this.__adapter.size = size;
+  }
+
+  get size() {
+    return this.__adapter.size;
+  }
+
+  scrollToIndex(index) {
+    this.__adapter.scrollToIndex(index);
+  }
+
+  notifyResize() {
+    this.__adapter.notifyResize();
+  }
+}
+
+// TODO: _vidxOffset (= unlimited size, grid scroller feature)
+// TODO: Restore scroll position after size change (grid scroller feature)
+class IronListAdapter {
+  constructor({ createItems, updateItem, scrollTarget, scrollContainer, itemsTarget }) {
     this.isAttached = true;
-    Object.assign(this, config);
+    this.createItems = createItems;
+    this.updateItem = updateItem;
+    this.scrollTarget = scrollTarget;
+    this.scrollContainer = scrollContainer;
+    this.itemsTarget = itemsTarget;
 
     // TODO: Too intrusive?
     if (getComputedStyle(this.scrollTarget).overflow === 'visible') {
@@ -106,4 +132,4 @@ export class Virtualizer {
   toggleScrollListener() {}
 }
 
-Object.setPrototypeOf(Virtualizer.prototype, ironList);
+Object.setPrototypeOf(IronListAdapter.prototype, ironList);
