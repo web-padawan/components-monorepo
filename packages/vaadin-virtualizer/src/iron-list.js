@@ -76,11 +76,6 @@ export const ironList = {
   _viewportHeight: 0,
 
   /**
-   * The width of the list. This is referred as the viewport in the context of list.
-   */
-  _viewportWidth: 0,
-
-  /**
    * An array of DOM nodes that are currently in the tree
    * @type {?Array<!TemplateInstanceBase>}
    */
@@ -217,7 +212,7 @@ export const ironList = {
    * True if the current list is visible.
    */
   get _isVisible() {
-    return Boolean(this.offsetWidth || this.offsetHeight);
+    return Boolean(this.offsetHeight);
   },
 
   /**

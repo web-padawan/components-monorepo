@@ -1,19 +1,27 @@
 import { ironList } from './iron-list';
 
-// TODO: _vidxOffset
+// TODO: _vidxOffset (= unlimited size, grid scroller feature)
+// TODO: Restore scroll position after size change (grid scroller feature)
 export class Virtualizer {
   constructor(config) {
     this.isAttached = true;
-    this._scrollTop = 0;
-
     Object.assign(this, config);
 
-    this.scrollContainer.style.position = 'relative';
+    // TODO: Too intrusive?
+    if (getComputedStyle(this.scrollTarget).overflow === 'visible') {
+      this.scrollTarget.style.overflow = 'auto';
+    }
+    // TODO: Too intrusive?
+    if (getComputedStyle(this.scrollContainer).position === 'static') {
+      this.scrollContainer.style.position = 'relative';
+    }
+
     new ResizeObserver(() => this._resizeHandler()).observe(this.scrollTarget);
-    this.scrollTarget.addEventListener('scroll', () => {
-      this._scrollTop = this.scrollTarget.scrollTop;
-      this._scrollHandler();
-    });
+    this.scrollTarget.addEventListener('scroll', () => this._scrollHandler());
+  }
+
+  notifyResize() {
+    this._resizeHandler();
   }
 
   set size(size) {
@@ -31,15 +39,20 @@ export class Virtualizer {
   }
 
   /** @private */
+  get _scrollTop() {
+    return this.scrollTarget.scrollTop;
+  }
+
+  /** @private */
+  set _scrollTop(top) {
+    this.scrollTarget.scrollTop = top;
+  }
+
+  /** @private */
   get items() {
     return {
       length: this.size
     };
-  }
-
-  /** @private */
-  get offsetWidth() {
-    return this.scrollTarget.offsetWidth;
   }
 
   /** @private */
@@ -58,7 +71,6 @@ export class Virtualizer {
   updateViewportBoundaries() {
     const styles = window.getComputedStyle(this.scrollTarget);
     this._scrollerPaddingTop = this.scrollTarget === this ? 0 : parseInt(styles['padding-top'], 10);
-    this._viewportWidth = this.$.items.offsetWidth;
     this._viewportHeight = this.scrollTarget.offsetHeight;
   }
 
