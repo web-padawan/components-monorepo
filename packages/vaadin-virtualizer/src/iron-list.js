@@ -107,11 +107,6 @@ export const ironList = {
   _maxPages: 2,
 
   /**
-   * The virtual index of the focused item.
-   */
-  _focusedVirtualIndex: -1,
-
-  /**
    * The cost of stamping a template in ms.
    */
   _templateCost: 0,
@@ -260,17 +255,6 @@ export const ironList = {
 
   get _scrollOffset() {
     return this._scrollerPaddingTop;
-  },
-
-  attached: function () {
-    this._debounce('_render', this._render, animationFrame);
-    // `iron-resize` is fired when the list is attached if the event is added
-    // before attached causing unnecessary work.
-    this.listen(this, 'iron-resize', '_resizeHandler');
-  },
-
-  detached: function () {
-    this.unlisten(this, 'iron-resize', '_resizeHandler');
   },
 
   /**
@@ -424,16 +408,7 @@ export const ironList = {
         this._physicalSizes.push(0);
       }
       this._physicalCount = this._physicalCount + delta;
-      // Update the physical start if it needs to preserve the model of the focused item.
-      // In this situation, the focused item is currently rendered and its model would
-      // have changed after increasing the pool if the physical start remained unchanged.
-      if (
-        this._physicalStart > this._physicalEnd &&
-        this._isIndexRendered(this._focusedVirtualIndex) &&
-        this._getPhysicalIndex(this._focusedVirtualIndex) < this._physicalEnd
-      ) {
-        this._physicalStart = this._physicalStart + delta;
-      }
+
       this._update();
       this._templateCost = (window.performance.now() - ts) / delta;
       nextIncrease = Math.round(this._physicalCount * 0.5);
@@ -719,10 +694,6 @@ export const ironList = {
 
   _isIndexRendered: function (idx) {
     return idx >= this._virtualStart && idx <= this._virtualEnd;
-  },
-
-  _getPhysicalIndex: function (vidx) {
-    return (this._physicalStart + (vidx - this._virtualStart)) % this._physicalCount;
   },
 
   _clamp: function (v, min, max) {
