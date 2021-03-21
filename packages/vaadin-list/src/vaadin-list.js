@@ -22,9 +22,9 @@ export class VaadinList extends LitElement {
 
   firstUpdated() {
     this.__virtualizer = new Virtualizer({
-      createItems: this.__createItems,
-      updateItem: this.__updateItem.bind(this),
-      itemsTarget: this,
+      createElements: this.__createElements,
+      updateElement: this.__updateElement.bind(this),
+      elementsContainer: this,
       scrollTarget: this,
       scrollContainer: this.shadowRoot.querySelector('div')
     });
@@ -37,7 +37,7 @@ export class VaadinList extends LitElement {
   }
 
   /** @private */
-  __createItems(count) {
+  __createElements(count) {
     const items = [];
     for (let i = 0; i < count; i++) {
       items.push(document.createElement('div'));
@@ -46,7 +46,7 @@ export class VaadinList extends LitElement {
   }
 
   /** @private */
-  __updateItem(el, index) {
+  __updateElement(el, index) {
     this.renderer(el, { item: this.items[index], index });
   }
 

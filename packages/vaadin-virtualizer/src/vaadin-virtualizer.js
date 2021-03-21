@@ -25,13 +25,13 @@ export class Virtualizer {
 // TODO: _vidxOffset (= unlimited size, grid scroller feature)
 // TODO: Restore scroll position after size change (grid scroller feature)
 class IronListAdapter {
-  constructor({ createItems, updateItem, scrollTarget, scrollContainer, itemsTarget }) {
+  constructor({ createElements, updateElement, scrollTarget, scrollContainer, elementsContainer }) {
     this.isAttached = true;
-    this.createItems = createItems;
-    this.updateItem = updateItem;
+    this.createElements = createElements;
+    this.updateElement = updateElement;
     this.scrollTarget = scrollTarget;
     this.scrollContainer = scrollContainer;
-    this.itemsTarget = itemsTarget;
+    this.elementsContainer = elementsContainer;
 
     // TODO: Too intrusive?
     if (getComputedStyle(this.scrollTarget).overflow === 'visible') {
@@ -102,13 +102,13 @@ class IronListAdapter {
 
   /** @private */
   _createPool(size) {
-    const physicalItems = this.createItems(size);
+    const physicalItems = this.createElements(size);
     const fragment = document.createDocumentFragment();
     physicalItems.forEach((el) => {
       el.style.position = 'absolute';
       fragment.appendChild(el);
     });
-    this.itemsTarget.appendChild(fragment);
+    this.elementsContainer.appendChild(fragment);
     return physicalItems;
   }
 
@@ -118,7 +118,7 @@ class IronListAdapter {
       const el = this._physicalItems[pidx];
       el.hidden = vidx >= this._effectiveSize;
       if (!el.hidden) {
-        this.updateItem(el, vidx + (this._vidxOffset || 0));
+        this.updateElement(el, vidx + (this._vidxOffset || 0));
       }
     }, itemSet);
   }

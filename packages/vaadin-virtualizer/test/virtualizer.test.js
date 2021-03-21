@@ -16,14 +16,14 @@ describe('virtualizer', () => {
     scrollContainer = scrollTarget.firstElementChild;
 
     virtualizer = new Virtualizer({
-      createItems: (count) => Array.from(Array(count)).map(() => document.createElement('div')),
-      updateItem: (el, index) => {
+      createElements: (count) => Array.from(Array(count)).map(() => document.createElement('div')),
+      updateElement: (el, index) => {
         el.id = `item-${index}`;
         el.textContent = el.id;
       },
       scrollTarget,
       scrollContainer,
-      itemsTarget: scrollContainer
+      elementsContainer: scrollContainer
     });
 
     virtualizer.size = 100;

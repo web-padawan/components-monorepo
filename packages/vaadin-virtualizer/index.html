@@ -16,10 +16,10 @@
       import { Virtualizer } from '.';
 
       const virtualizedList = new Virtualizer({
-        createItems: (count) => Array.from(Array(count)).map(() => document.createElement('div')),
-        updateItem: (el, index) => (el.textContent = index),
+        createElements: (count) => Array.from(Array(count)).map(() => document.createElement('div')),
+        updateElement: (el, index) => (el.textContent = index),
         scrollTarget: document.querySelector('#virtualized-list'),
-        itemsTarget: document.querySelector('#scroll-container'),
+        elementsContainer: document.querySelector('#scroll-container'),
         scrollContainer: document.querySelector('#scroll-container')
       });
 
