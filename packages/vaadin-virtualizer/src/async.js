@@ -49,6 +49,55 @@ function microtaskFlush() {
 }
 
 /**
+ * Async interface wrapper around `setTimeout`.
+ *
+ * @namespace
+ * @summary Async interface wrapper around `setTimeout`.
+ */
+const timeOut = {
+  /**
+   * Returns a sub-module with the async interface providing the provided
+   * delay.
+   *
+   * @memberof timeOut
+   * @param {number=} delay Time to wait before calling callbacks in ms
+   * @return {!AsyncInterface} An async timeout interface
+   */
+  after(delay) {
+    return {
+      run(fn) {
+        return window.setTimeout(fn, delay);
+      },
+      cancel(handle) {
+        window.clearTimeout(handle);
+      }
+    };
+  },
+  /**
+   * Enqueues a function called in the next task.
+   *
+   * @memberof timeOut
+   * @param {!Function} fn Callback to run
+   * @param {number=} delay Delay in milliseconds
+   * @return {number} Handle used for canceling task
+   */
+  run(fn, delay) {
+    return window.setTimeout(fn, delay);
+  },
+  /**
+   * Cancels a previously enqueued `timeOut` callback.
+   *
+   * @memberof timeOut
+   * @param {number} handle Handle returned from `run` of callback to cancel
+   * @return {void}
+   */
+  cancel(handle) {
+    window.clearTimeout(handle);
+  }
+};
+export { timeOut };
+
+/**
  * Async interface wrapper around `requestAnimationFrame`.
  *
  * @namespace
