@@ -1,5 +1,5 @@
 import { timeOut } from './async';
-import { Debouncer, enqueueDebouncer, flush } from './debounce';
+import { Debouncer, flush } from './debounce';
 import { ironList } from './iron-list';
 
 // TODO: _vidxOffset (= unlimited size, grid scroller feature)
@@ -16,7 +16,7 @@ export class IronListAdapter {
     this.reorderElements = reorderElements;
 
     this.timeouts = {
-      SCROLLING: 500
+      SCROLL_REORDER: 500
     };
 
     // TODO: Too intrusive?
@@ -44,6 +44,7 @@ export class IronListAdapter {
   flush() {
     this._resizeHandler();
     flush();
+    this.__scrollReorderDebouncer?.flush();
   }
 
   set size(size) {
@@ -131,19 +132,17 @@ export class IronListAdapter {
   _scrollHandler() {
     super._scrollHandler();
 
-    enqueueDebouncer(
-      Debouncer.debounce('debounceVirtualizerIronListAdapterScrolling', timeOut.after(this.timeouts.SCROLLING), () => {
-        this.__reorderElements();
-      })
-    );
+    if (this.reorderElements) {
+      this.__scrollReorderDebouncer = Debouncer.debounce(
+        this.__scrollReorderDebouncer,
+        timeOut.after(this.timeouts.SCROLL_REORDER),
+        () => this.__reorderElements()
+      );
+    }
   }
 
   /** @private */
   __reorderElements() {
-    if (!this.reorderElements) {
-      return;
-    }
-
     const adjustedVirtualStart = this._virtualStart + (this._vidxOffset || 0);
 
     // Which row to use as a target?
