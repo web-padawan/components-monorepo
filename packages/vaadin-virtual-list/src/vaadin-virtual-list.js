@@ -20,6 +20,14 @@ export class VirtualListElement extends LitElement {
     };
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+
+    if (window.Vaadin.templateRendererCallback) {
+      window.Vaadin.templateRendererCallback(this);
+    }
+  }
+
   firstUpdated() {
     this.__virtualizer = new Virtualizer({
       createElements: this.__createElements,
