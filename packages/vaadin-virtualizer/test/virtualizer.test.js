@@ -5,7 +5,6 @@ import { Virtualizer } from '..';
 describe('virtualizer', () => {
   let virtualizer;
   let scrollTarget;
-  let scrollContainer;
   let elementsContainer;
 
   function init(config = {}) {
@@ -14,7 +13,7 @@ describe('virtualizer', () => {
         <div></div>
       </div>
     `);
-    scrollContainer = scrollTarget.firstElementChild;
+    const scrollContainer = scrollTarget.firstElementChild;
     elementsContainer = scrollContainer;
 
     virtualizer = new Virtualizer({
@@ -26,7 +25,6 @@ describe('virtualizer', () => {
       },
       scrollTarget,
       scrollContainer,
-      elementsContainer,
       ...config
     });
 

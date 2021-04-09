@@ -12,7 +12,7 @@ export class IronListAdapter {
     this.updateElement = updateElement;
     this.scrollTarget = scrollTarget;
     this.scrollContainer = scrollContainer;
-    this.elementsContainer = elementsContainer;
+    this.elementsContainer = elementsContainer || scrollContainer;
     this.reorderElements = reorderElements;
 
     this.timeouts = {
