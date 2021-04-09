@@ -17,11 +17,6 @@ export class Virtualizer {
     this.__adapter.scrollToIndex(index);
   }
 
-  /* Eliminate API in favour of resize observers? */
-  notifyResize() {
-    this.__adapter.notifyResize();
-  }
-
   flush() {
     this.__adapter.flush();
   }

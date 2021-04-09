@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { fixtureSync, oneEvent } from '@vaadin/testing-helpers';
+import { aTimeout, fixtureSync, oneEvent } from '@vaadin/testing-helpers';
 import Sinon from 'sinon';
 import { Virtualizer } from '..';
 
@@ -39,9 +39,23 @@ describe('virtualizer', () => {
     expect(item.getBoundingClientRect().top).to.equal(scrollTarget.getBoundingClientRect().top);
   });
 
+  it('should realign automatically on child item resize', async () => {
+    // Wait for possibly active resize observers to flush
+    await aTimeout(100);
+
+    const firstItem = elementsContainer.querySelector('#item-0');
+    const secondItem = elementsContainer.querySelector('#item-1');
+    firstItem.style.height = '50px';
+
+    // Wait for the resize observer to kick in and adjust the inline style transform
+    await new Promise((resolve) => new MutationObserver(resolve).observe(secondItem, { attributes: true }));
+
+    expect(secondItem.getBoundingClientRect().top).to.equal(firstItem.getBoundingClientRect().bottom);
+  });
+
   it('should support padding-top on scroll target', () => {
     scrollTarget.style.paddingTop = '10px';
-    virtualizer.notifyResize();
+    virtualizer.flush();
     virtualizer.scrollToIndex(0);
     const item = elementsContainer.querySelector('#item-0');
     expect(item.getBoundingClientRect().top).to.equal(scrollTarget.getBoundingClientRect().top);
@@ -72,10 +86,16 @@ describe('virtualizer', () => {
     expect(item.getBoundingClientRect().bottom).to.equal(scrollTarget.getBoundingClientRect().bottom);
   });
 
-  it('should increase the physical item count on height increase', () => {
+  it('should increase the physical item count on height increase', async () => {
+    // Wait for possibly active resize observers to flush
+    await aTimeout(100);
+
     const initialItemCount = elementsContainer.childElementCount;
     scrollTarget.style.height = `${scrollTarget.offsetHeight * 2}px`;
-    virtualizer.flush();
+
+    // Wait for the resize observer to kick in and add more child elements
+    await new Promise((resolve) => new MutationObserver(resolve).observe(elementsContainer, { childList: true }));
+
     expect(elementsContainer.childElementCount).to.be.above(initialItemCount);
   });
 

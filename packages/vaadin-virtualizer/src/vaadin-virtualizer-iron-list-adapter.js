@@ -19,6 +19,8 @@ export class IronListAdapter {
       SCROLL_REORDER: 500
     };
 
+    this.__resizeObserver = new ResizeObserver(() => this._resizeHandler());
+
     // TODO: Too intrusive?
     if (getComputedStyle(this.scrollTarget).overflow === 'visible') {
       this.scrollTarget.style.overflow = 'auto';
@@ -28,12 +30,8 @@ export class IronListAdapter {
       this.scrollContainer.style.position = 'relative';
     }
 
-    new ResizeObserver(() => this._resizeHandler()).observe(this.scrollTarget);
+    this.__resizeObserver.observe(this.scrollTarget);
     this.scrollTarget.addEventListener('scroll', () => this._scrollHandler());
-  }
-
-  notifyResize() {
-    this._resizeHandler();
   }
 
   scrollToIndex(index) {
@@ -104,6 +102,7 @@ export class IronListAdapter {
     physicalItems.forEach((el) => {
       el.style.position = 'absolute';
       fragment.appendChild(el);
+      this.__resizeObserver.observe(el);
     });
     this.elementsContainer.appendChild(fragment);
     return physicalItems;
