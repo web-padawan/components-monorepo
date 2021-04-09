@@ -1,5 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import { fixtureSync, oneEvent } from '@vaadin/testing-helpers';
+import Sinon from 'sinon';
 import { Virtualizer } from '..';
 
 describe('virtualizer', () => {
@@ -79,7 +80,9 @@ describe('virtualizer', () => {
   });
 
   describe('reorder elements', () => {
+    const REORDER_DEBOUNCE_TIMEOUT = 500;
     let recycledElement;
+    let clock;
 
     // This helper checks whether all the elements are in numerical order by their index
     function elementsInOrder() {
@@ -91,20 +94,28 @@ describe('virtualizer', () => {
     // This helper scrolls the virtualizer enough to cause some elements to get
     // recycled but not too much to cause a full recycle.
     // Returns a list of the elements that were detached while being reordered.
-    async function scrollRecycle() {
+    async function scrollRecycle(skipFlush = false) {
       return await new Promise((resolve) => {
         new MutationObserver((mutations) => {
           resolve(mutations.flatMap((record) => [...record.removedNodes]));
         }).observe(elementsContainer, { childList: true });
 
         virtualizer.scrollToIndex(Math.ceil(elementsContainer.childElementCount / 2));
-        virtualizer.flush();
+
+        if (!skipFlush) {
+          virtualizer.flush();
+        }
       });
     }
 
     beforeEach(() => {
       init({ reorderElements: true });
       recycledElement = elementsContainer.children[2];
+      clock = Sinon.useFakeTimers();
+    });
+
+    afterEach(() => {
+      clock.restore();
     });
 
     it('should have the elements in order', async () => {
@@ -135,6 +146,18 @@ describe('virtualizer', () => {
     it('should not try to reorder an empty virtualizer', async () => {
       virtualizer.size = 0;
       expect(async () => await scrollRecycle()).not.to.throw(Error);
+    });
+
+    it('should not reorder before debouncer flushes', () => {
+      scrollRecycle(true);
+      clock.tick(REORDER_DEBOUNCE_TIMEOUT - 10);
+      expect(elementsInOrder()).to.be.false;
+    });
+
+    it('should reorder once debouncer flushes', () => {
+      scrollRecycle(true);
+      clock.tick(REORDER_DEBOUNCE_TIMEOUT);
+      expect(elementsInOrder()).to.be.true;
     });
   });
 
