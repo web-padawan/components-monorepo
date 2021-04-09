@@ -44,7 +44,7 @@ export class IronListAdapter {
   flush() {
     this._resizeHandler();
     flush();
-    this.__scrollReorderDebouncer?.flush();
+    this.__scrollReorderDebouncer && this.__scrollReorderDebouncer.flush();
   }
 
   set size(size) {

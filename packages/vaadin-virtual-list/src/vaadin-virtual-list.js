@@ -26,7 +26,7 @@ export class VirtualListElement extends LitElement {
       updateElement: this.__updateElement.bind(this),
       elementsContainer: this,
       scrollTarget: this,
-      scrollContainer: this.shadowRoot.querySelector('div')
+      scrollContainer: this.shadowRoot.querySelector('#scroll-container')
     });
   }
 
@@ -47,11 +47,13 @@ export class VirtualListElement extends LitElement {
 
   /** @private */
   __updateElement(el, index) {
-    this.renderer(el, { item: this.items[index], index });
+    if (this.renderer) {
+      this.renderer(el, { item: this.items[index], index });
+    }
   }
 
   render() {
-    return html`<div>
+    return html`<div id="scroll-container">
       <slot></slot>
     </div>`;
   }
