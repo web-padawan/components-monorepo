@@ -19,7 +19,8 @@
         createElements: (count) => Array.from(Array(count)).map(() => document.createElement('div')),
         updateElement: (el, index) => (el.textContent = index),
         scrollTarget: document.querySelector('#virtualized-list'),
-        scrollContainer: document.querySelector('#scroll-container')
+        scrollContainer: document.querySelector('#scroll-container'),
+        reorderElements: true
       });
 
       virtualizedList.size = 1000;

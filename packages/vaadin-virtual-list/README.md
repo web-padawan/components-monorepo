@@ -1,21 +1,21 @@
-# &lt;vaadin-list&gt;
+# &lt;vaadin-virtual-list&gt;
 
 ```html
-<vaadin-list style="height: 100%; width: 100%" .items="${this.items}"></vaadin-list>
+<vaadin-virtual-list style="height: 100%; width: 100%" .items="${this.items}"></vaadin-virtual-list>
 ```
 
 ## Installation
 
-Install `vaadin-list`:
+Install `vaadin-virtual-list`:
 
 ```sh
-npm i @vaadin/vaadin-list --save
+npm i @vaadin/vaadin-virtual-list --save
 ```
 
 Once installed, import it in your application:
 
 ```js
-import '@vaadin/vaadin-list/vaadin-list.js';
+import '@vaadin/vaadin-virtual-list/vaadin-virtual-list.js';
 ```
 
 ## Getting started
@@ -28,25 +28,25 @@ To use the Material theme, import the correspondent file from the `theme/materia
 
 - The component with the Lumo theme:
 
-  `theme/lumo/vaadin-list.js`
+  `theme/lumo/vaadin-virtual-list.js`
 
 - The component with the Material theme:
 
-  `theme/material/vaadin-list.js`
+  `theme/material/vaadin-virtual-list.js`
 
-- Alias for `theme/lumo/vaadin-list.js`:
+- Alias for `theme/lumo/vaadin-virtual-list.js`:
 
-  `vaadin-list.js`
+  `vaadin-virtual-list.js`
 
 ## Running API docs and tests in a browser
 
-1. Fork the `vaadin-list` repository and clone it locally.
+1. Fork the `vaadin-virtual-list` repository and clone it locally.
 
 1. Make sure you have [node.js](https://nodejs.org/) 12.x installed.
 
 1. Make sure you have [npm](https://www.npmjs.com/) installed.
 
-1. When in the `vaadin-list` directory, run `npm install` to install dependencies.
+1. When in the `vaadin-virtual-list` directory, run `npm install` to install dependencies.
 
 1. Run `npm start`, browser will automatically open the component API documentation.
 
@@ -56,7 +56,7 @@ To use the Material theme, import the correspondent file from the `theme/materia
 
 ## Running tests from the command line
 
-1. When in the `vaadin-list` directory, run `npm test`
+1. When in the `vaadin-virtual-list` directory, run `npm test`
 
 ## Debugging tests in the browser
 

@@ -18,13 +18,13 @@
     </style>
   </head>
   <body>
-    <vaadin-list style="height: 100%; width: 100%"></vaadin-list>
+    <vaadin-virtual-list style="height: 100%; width: 100%"></vaadin-virtual-list>
 
     <script type="module">
-      import './vaadin-list';
+      import './vaadin-virtual-list';
       import { render, html } from 'lit-html';
 
-      const list = document.querySelector('vaadin-list');
+      const list = document.querySelector('vaadin-virtual-list');
 
       // Assign an item renderer
       list.renderer = (root, { item, index }) => {

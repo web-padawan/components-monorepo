@@ -1,7 +1,7 @@
 import { css, html, LitElement } from 'lit-element';
 import { Virtualizer } from '@vaadin/vaadin-virtualizer';
 
-export class VaadinList extends LitElement {
+export class VirtualListElement extends LitElement {
   static get styles() {
     return css`
       :host {
@@ -57,4 +57,4 @@ export class VaadinList extends LitElement {
   }
 }
 
-customElements.define('vaadin-list', VaadinList);
+customElements.define('vaadin-virtual-list', VirtualListElement);

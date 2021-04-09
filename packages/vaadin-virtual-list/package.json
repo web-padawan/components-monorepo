@@ -1,10 +1,10 @@
 {
-  "name": "@vaadin/vaadin-list",
+  "name": "@vaadin/vaadin-virtual-list",
   "version": "21.0.0-alpha1",
-  "description": "vaadin-list",
-  "main": "vaadin-list.js",
-  "module": "vaadin-list.js",
-  "repository": "vaadin/vaadin-list",
+  "description": "vaadin-virtual-list",
+  "main": "vaadin-virtual-list.js",
+  "module": "vaadin-virtual-list.js",
+  "repository": "vaadin/vaadin-virtual-list",
   "keywords": [
     "Vaadin",
     "list",
