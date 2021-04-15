@@ -2,12 +2,17 @@ import { timeOut } from './async';
 import { Debouncer, flush } from './debounce';
 import { ironList } from './iron-list';
 
-// TODO: _vidxOffset (= unlimited size, grid scroller feature)
+// iron-list can by default handle sizes up to around 100000.
+// When the size is larger than MAX_VIRTUAL_COUNT _vidxOffset is used
+const MAX_VIRTUAL_COUNT = 100000;
+
 // TODO: Restore scroll position after size change (grid scroller feature)
 // TODO: Convenient wheel scrolling (document won't immediately scroll once an edge is reached, grid-scroll-mixin feature)
+// TODO: API for requesting render for an index range
 export class IronListAdapter {
   constructor({ createElements, updateElement, scrollTarget, scrollContainer, elementsContainer, reorderElements }) {
     this.isAttached = true;
+    this._vidxOffset = 0;
     this.createElements = createElements;
     this.updateElement = updateElement;
     this.scrollTarget = scrollTarget;
@@ -35,8 +40,24 @@ export class IronListAdapter {
   }
 
   scrollToIndex(index) {
-    super.scrollToIndex(index);
-    this._scrollHandler();
+    index = this._clamp(index, 0, this.size - 1);
+
+    let targetVirtualIndex = Math.floor((index / this.size) * this._virtualCount);
+    if (this._virtualCount - targetVirtualIndex < this.elementsContainer.childElementCount) {
+      targetVirtualIndex = this._virtualCount - (this.size - index);
+      this._vidxOffset = this.size - this._virtualCount;
+    } else if (targetVirtualIndex < this.elementsContainer.childElementCount) {
+      targetVirtualIndex = index;
+      this._vidxOffset = 0;
+    } else {
+      this._vidxOffset = index - targetVirtualIndex;
+    }
+
+    do {
+      this.__skipNextVirtualIndexAdjust = true;
+      super.scrollToIndex(targetVirtualIndex);
+      this._scrollHandler();
+    } while (this.firstVisibleIndex !== index - this._vidxOffset && this._scrollTop < this._maxScrollTop);
   }
 
   flush() {
@@ -47,8 +68,6 @@ export class IronListAdapter {
 
   set size(size) {
     this.__size = size;
-    // TODO: _vidxOffset
-    this._effectiveSize = size;
     this._itemsChanged({
       path: 'items'
     });
@@ -72,7 +91,7 @@ export class IronListAdapter {
   /** @private */
   get items() {
     return {
-      length: this.size
+      length: Math.min(this.size, MAX_VIRTUAL_COUNT)
     };
   }
 
@@ -112,12 +131,19 @@ export class IronListAdapter {
   _assignModels(itemSet) {
     this._iterateItems((pidx, vidx) => {
       const el = this._physicalItems[pidx];
-      el.hidden = vidx >= this._effectiveSize;
+      el.hidden = vidx >= this.size;
       if (!el.hidden) {
         el.__virtualIndex = vidx + (this._vidxOffset || 0);
         this.updateElement(el, el.__virtualIndex);
       }
     }, itemSet);
+  }
+
+  /** @private */
+  _isClientFull() {
+    // Workaround an issue in iron-list that can cause it to freeze on fast scroll
+    setTimeout(() => (this.__clientFull = true));
+    return this.__clientFull || super._isClientFull();
   }
 
   /** @private */
@@ -129,6 +155,8 @@ export class IronListAdapter {
   toggleScrollListener() {}
 
   _scrollHandler() {
+    this._adjustVirtualIndexOffset(this._scrollTop - (this.__previousScrollTop || 0));
+
     super._scrollHandler();
 
     if (this.reorderElements) {
@@ -138,6 +166,8 @@ export class IronListAdapter {
         () => this.__reorderElements()
       );
     }
+
+    this.__previousScrollTop = this._scrollTop;
   }
 
   /** @private */
@@ -165,6 +195,50 @@ export class IronListAdapter {
     } else if (delta < 0) {
       for (let i = visibleElements.length + delta; i < visibleElements.length; i++) {
         this.elementsContainer.insertBefore(visibleElements[i], visibleElements[0]);
+      }
+    }
+  }
+
+  /** @private */
+  _adjustVirtualIndexOffset(delta) {
+    if (this._virtualCount >= this.size) {
+      this._vidxOffset = 0;
+    } else if (Math.abs(delta) > 10000) {
+      if (this.__skipNextVirtualIndexAdjust) {
+        this.__skipNextVirtualIndexAdjust = false;
+        return;
+      }
+      const scale = this._scrollTop / (this.scrollTarget.scrollHeight - this.scrollTarget.offsetHeight);
+      const offset = scale * this.size;
+      this._vidxOffset = Math.round(offset - scale * this._virtualCount);
+    } else {
+      // Make sure user can always swipe/wheel scroll to the start and end
+      const oldOffset = this._vidxOffset;
+      const threshold = 1000;
+      const maxShift = 100;
+      this.__skipNextVirtualIndexAdjust = false;
+
+      // Near start
+      if (this._scrollTop === 0) {
+        this._vidxOffset = 0;
+        if (oldOffset !== this._vidxOffset) {
+          super.scrollToIndex(0);
+        }
+      } else if (this.firstVisibleIndex < threshold && this._vidxOffset > 0) {
+        this._vidxOffset -= Math.min(this._vidxOffset, maxShift);
+        super.scrollToIndex(this.firstVisibleIndex + (oldOffset - this._vidxOffset));
+      }
+
+      // Near end
+      const maxOffset = this.size - this._virtualCount;
+      if (this._scrollTop >= this._maxScrollTop && this._maxScrollTop > 0) {
+        this._vidxOffset = maxOffset;
+        if (oldOffset !== this._vidxOffset) {
+          super.scrollToIndex(this._virtualCount - 1);
+        }
+      } else if (this.firstVisibleIndex > this._virtualCount - threshold && this._vidxOffset < maxOffset) {
+        this._vidxOffset += Math.min(maxOffset - this._vidxOffset, maxShift);
+        super.scrollToIndex(this.firstVisibleIndex - (this._vidxOffset - oldOffset));
       }
     }
   }
