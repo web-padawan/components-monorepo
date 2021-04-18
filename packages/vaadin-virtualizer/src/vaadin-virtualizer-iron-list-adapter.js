@@ -6,7 +6,6 @@ import { ironList } from './iron-list';
 // When the size is larger than MAX_VIRTUAL_COUNT _vidxOffset is used
 const MAX_VIRTUAL_COUNT = 100000;
 
-// TODO: Restore scroll position after size change (grid scroller feature)
 // TODO: Convenient wheel scrolling (document won't immediately scroll once an edge is reached, grid-scroll-mixin feature)
 // TODO: API for requesting render for an index range
 export class IronListAdapter {
@@ -67,11 +66,18 @@ export class IronListAdapter {
   }
 
   set size(size) {
+    const fvi = this.firstVisibleIndex + this._vidxOffset;
+    const fviEl = Array.from(this.elementsContainer.children).find((el) => el.__virtualIndex === fvi);
+    const fviOffset = fviEl ? this.scrollTarget.getBoundingClientRect().top - fviEl.getBoundingClientRect().top : 0;
+
     this.__size = size;
     this._itemsChanged({
       path: 'items'
     });
     this._render();
+
+    this.scrollToIndex(fvi);
+    this._scrollTop += fviOffset;
   }
 
   get size() {
@@ -203,11 +209,10 @@ export class IronListAdapter {
   _adjustVirtualIndexOffset(delta) {
     if (this._virtualCount >= this.size) {
       this._vidxOffset = 0;
+    } else if (this.__skipNextVirtualIndexAdjust) {
+      this.__skipNextVirtualIndexAdjust = false;
+      return;
     } else if (Math.abs(delta) > 10000) {
-      if (this.__skipNextVirtualIndexAdjust) {
-        this.__skipNextVirtualIndexAdjust = false;
-        return;
-      }
       const scale = this._scrollTop / (this.scrollTarget.scrollHeight - this.scrollTarget.offsetHeight);
       const offset = scale * this.size;
       this._vidxOffset = Math.round(offset - scale * this._virtualCount);
@@ -216,7 +221,6 @@ export class IronListAdapter {
       const oldOffset = this._vidxOffset;
       const threshold = 1000;
       const maxShift = 100;
-      this.__skipNextVirtualIndexAdjust = false;
 
       // Near start
       if (this._scrollTop === 0) {

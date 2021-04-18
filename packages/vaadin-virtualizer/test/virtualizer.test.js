@@ -129,6 +129,16 @@ describe('virtualizer', () => {
     expect(item.getBoundingClientRect().top).to.equal(scrollTarget.getBoundingClientRect().top);
   });
 
+  it('should restore scroll position on size change', async () => {
+    // Scroll to item 50 and an additional 10 pixels
+    virtualizer.scrollToIndex(50);
+    scrollTarget.scrollTop = scrollTarget.scrollTop + 10;
+
+    virtualizer.size = virtualizer.size * 2;
+    const item = elementsContainer.querySelector('#item-50');
+    expect(item.getBoundingClientRect().top).to.equal(scrollTarget.getBoundingClientRect().top - 10);
+  });
+
   describe('reorder elements', () => {
     const REORDER_DEBOUNCE_TIMEOUT = 500;
     let recycledElement;
@@ -346,14 +356,4 @@ describe('virtualizer', () => {
       expect(item.getBoundingClientRect().bottom).to.be.closeTo(scrollTarget.getBoundingClientRect().bottom, 1);
     });
   });
-
-  // it('should restore scroll position on size change', async () => {
-  //   // Scroll to item 50 and an additional 10 pixels
-  //   virtualizer.scrollToIndex(50);
-  //   scrollTarget.scrollTop = scrollTarget.scrollTop + 10;
-
-  //   virtualizer.size = virtualizer.size * 2;
-  //   const item = scrollContainer.querySelector('#item-50');
-  //   expect(item.getBoundingClientRect().top).to.equal(scrollTarget.getBoundingClientRect().top - 10);
-  // });
 });
