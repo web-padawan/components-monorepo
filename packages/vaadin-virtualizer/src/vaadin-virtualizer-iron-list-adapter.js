@@ -1,4 +1,4 @@
-import { timeOut } from './async';
+import { timeOut, animationFrame } from './async';
 import { Debouncer, flush } from './debounce';
 import { ironList } from './iron-list';
 
@@ -6,7 +6,6 @@ import { ironList } from './iron-list';
 // When the size is larger than MAX_VIRTUAL_COUNT _vidxOffset is used
 const MAX_VIRTUAL_COUNT = 100000;
 
-// TODO: Convenient wheel scrolling (document won't immediately scroll once an edge is reached, grid-scroll-mixin feature)
 // TODO: API for requesting render for an index range
 export class IronListAdapter {
   constructor({ createElements, updateElement, scrollTarget, scrollContainer, elementsContainer, reorderElements }) {
@@ -20,7 +19,8 @@ export class IronListAdapter {
     this.reorderElements = reorderElements;
 
     this.timeouts = {
-      SCROLL_REORDER: 500
+      SCROLL_REORDER: 500,
+      IGNORE_WHEEL: 500
     };
 
     this.__resizeObserver = new ResizeObserver(() => this._resizeHandler());
@@ -36,6 +36,9 @@ export class IronListAdapter {
 
     this.__resizeObserver.observe(this.scrollTarget);
     this.scrollTarget.addEventListener('scroll', () => this._scrollHandler());
+
+    this._scrollLineHeight = this._getScrollLineHeight();
+    this.scrollTarget.addEventListener('wheel', (e) => this.__onWheel(e));
   }
 
   scrollToIndex(index) {
@@ -63,6 +66,7 @@ export class IronListAdapter {
     this._resizeHandler();
     flush();
     this.__scrollReorderDebouncer && this.__scrollReorderDebouncer.flush();
+    this.__debouncerWheelAnimationFrame && this.__debouncerWheelAnimationFrame.flush();
   }
 
   set size(size) {
@@ -118,6 +122,7 @@ export class IronListAdapter {
     const styles = window.getComputedStyle(this.scrollTarget);
     this._scrollerPaddingTop = this.scrollTarget === this ? 0 : parseInt(styles['padding-top'], 10);
     this._viewportHeight = this.scrollTarget.offsetHeight;
+    this._scrollPageHeight = this._viewportHeight - this._scrollLineHeight;
   }
 
   /** @private */
@@ -177,6 +182,104 @@ export class IronListAdapter {
   }
 
   /** @private */
+  __onWheel(e) {
+    if (e.ctrlKey || this._hasScrolledAncestor(e.target, e.deltaX, e.deltaY)) {
+      return;
+    }
+
+    let deltaY = e.deltaY;
+    if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      // Scrolling by "lines of text" instead of pixels
+      deltaY *= this._scrollLineHeight;
+    } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      // Scrolling by "pages" instead of pixels
+      deltaY *= this._scrollPageHeight;
+    }
+
+    this._deltaYAcc = this._deltaYAcc || 0;
+
+    if (this._wheelAnimationFrame) {
+      // Accumulate wheel delta while a frame is being processed
+      this._deltaYAcc += deltaY;
+      e.preventDefault();
+      return;
+    }
+
+    deltaY += this._deltaYAcc;
+    this._deltaYAcc = 0;
+
+    this._wheelAnimationFrame = true;
+    this.__debouncerWheelAnimationFrame = Debouncer.debounce(
+      this.__debouncerWheelAnimationFrame,
+      animationFrame,
+      () => (this._wheelAnimationFrame = false)
+    );
+
+    const momentum = Math.abs(e.deltaX) + Math.abs(deltaY);
+
+    if (this._canScroll(this.scrollTarget, e.deltaX, deltaY)) {
+      e.preventDefault();
+      this.scrollTarget.scrollTop += deltaY;
+      this.scrollTarget.scrollLeft += e.deltaX;
+
+      this._hasResidualMomentum = true;
+
+      this._ignoreNewWheel = true;
+      this._debouncerIgnoreNewWheel = Debouncer.debounce(
+        this._debouncerIgnoreNewWheel,
+        timeOut.after(this.timeouts.IGNORE_WHEEL),
+        () => (this._ignoreNewWheel = false)
+      );
+    } else if ((this._hasResidualMomentum && momentum <= this._previousMomentum) || this._ignoreNewWheel) {
+      e.preventDefault();
+    } else if (momentum > this._previousMomentum) {
+      this._hasResidualMomentum = false;
+    }
+    this._previousMomentum = momentum;
+  }
+
+  /**
+   * Determines if the element has an ancestor that handles the scroll delta prior to this
+   *
+   * @private
+   */
+  _hasScrolledAncestor(el, deltaX, deltaY) {
+    if (el === this.scrollTarget) {
+      return false;
+    } else if (
+      this._canScroll(el, deltaX, deltaY) &&
+      ['auto', 'scroll'].indexOf(getComputedStyle(el).overflow) !== -1
+    ) {
+      return true;
+    } else if (el !== this && el.parentElement) {
+      return this._hasScrolledAncestor(el.parentElement, deltaX, deltaY);
+    }
+  }
+
+  _canScroll(el, deltaX, deltaY) {
+    return (
+      (deltaY > 0 && el.scrollTop < el.scrollHeight - el.offsetHeight) ||
+      (deltaY < 0 && el.scrollTop > 0) ||
+      (deltaX > 0 && el.scrollLeft < el.scrollWidth - el.offsetWidth) ||
+      (deltaX < 0 && el.scrollLeft > 0)
+    );
+  }
+
+  /**
+   * @returns {Number|undefined} - The browser's default font-size in pixels
+   * @private
+   */
+  _getScrollLineHeight() {
+    const el = document.createElement('div');
+    el.style.fontSize = 'initial';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    const fontSize = window.getComputedStyle(el).fontSize;
+    document.body.removeChild(el);
+    return fontSize ? window.parseInt(fontSize) : undefined;
+  }
+
+  /** @private */
   __reorderElements() {
     const adjustedVirtualStart = this._virtualStart + (this._vidxOffset || 0);
 
@@ -213,6 +316,7 @@ export class IronListAdapter {
       this.__skipNextVirtualIndexAdjust = false;
       return;
     } else if (Math.abs(delta) > 10000) {
+      // Process a large scroll position change
       const scale = this._scrollTop / (this.scrollTarget.scrollHeight - this.scrollTarget.offsetHeight);
       const offset = scale * this.size;
       this._vidxOffset = Math.round(offset - scale * this._virtualCount);
