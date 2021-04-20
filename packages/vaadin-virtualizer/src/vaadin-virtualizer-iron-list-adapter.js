@@ -25,11 +25,10 @@ export class IronListAdapter {
 
     this.__resizeObserver = new ResizeObserver(() => this._resizeHandler());
 
-    // TODO: Too intrusive?
     if (getComputedStyle(this.scrollTarget).overflow === 'visible') {
       this.scrollTarget.style.overflow = 'auto';
     }
-    // TODO: Too intrusive?
+
     if (getComputedStyle(this.scrollContainer).position === 'static') {
       this.scrollContainer.style.position = 'relative';
     }
@@ -39,6 +38,12 @@ export class IronListAdapter {
 
     this._scrollLineHeight = this._getScrollLineHeight();
     this.scrollTarget.addEventListener('wheel', (e) => this.__onWheel(e));
+  }
+
+  _manageFocus() {}
+
+  get scrollOffset() {
+    return 0;
   }
 
   scrollToIndex(index) {
@@ -59,7 +64,7 @@ export class IronListAdapter {
       this.__skipNextVirtualIndexAdjust = true;
       super.scrollToIndex(targetVirtualIndex);
       this._scrollHandler();
-    } while (this.firstVisibleIndex !== index - this._vidxOffset && this._scrollTop < this._maxScrollTop);
+    } while (this.firstVisibleIndex !== index - this._vidxOffset && this._scrollTop < this._maxScrollTop && !this.grid);
   }
 
   flush() {
@@ -121,8 +126,16 @@ export class IronListAdapter {
   updateViewportBoundaries() {
     const styles = window.getComputedStyle(this.scrollTarget);
     this._scrollerPaddingTop = this.scrollTarget === this ? 0 : parseInt(styles['padding-top'], 10);
+    this._isRTL = Boolean(styles.direction === 'rtl');
+    this._viewportWidth = this.elementsContainer.offsetWidth;
     this._viewportHeight = this.scrollTarget.offsetHeight;
     this._scrollPageHeight = this._viewportHeight - this._scrollLineHeight;
+    this.grid && this._updateGridMetrics();
+  }
+
+  /** @private */
+  setAttribute(name, value) {
+    this.scrollTarget.setAttribute(name, value);
   }
 
   /** @private */
@@ -158,8 +171,8 @@ export class IronListAdapter {
   }
 
   /** @private */
-  translate3d(_x, y, _z, el) {
-    el.style.transform = `translate3d(0, ${y}, 0)`;
+  translate3d(x, y, _z, el) {
+    el.style.transform = `translate3d(${x}, ${y}, 0)`;
   }
 
   /** @private */

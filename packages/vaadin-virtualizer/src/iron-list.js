@@ -20,7 +20,8 @@ import { animationFrame, idlePeriod, microTask } from './async';
 export const ironList = {
   /**
    * The ratio of hidden tiles that should remain in the scroll direction.
-   * Recommended value ~0.5, so it will distribute tiles evenly in both directions.
+   * Recommended value ~0.5, so it will distribute tiles evenly in both
+   * directions.
    */
   _ratio: 0.5,
 
@@ -30,7 +31,7 @@ export const ironList = {
   _scrollerPaddingTop: 0,
 
   /**
-   * This value is the same as `scrollTop`.
+   * This value is a cached value of `scrollTop` from the last `scroll` event.
    */
   _scrollPosition: 0,
 
@@ -71,13 +72,20 @@ export const ironList = {
   _scrollHeight: 0,
 
   /**
-   * The height of the list. This is referred as the viewport in the context of list.
+   * The height of the list. This is referred as the viewport in the context of
+   * list.
    */
   _viewportHeight: 0,
 
   /**
+   * The width of the list. This is referred as the viewport in the context of
+   * list.
+   */
+  _viewportWidth: 0,
+
+  /**
    * An array of DOM nodes that are currently in the tree
-   * @type {?Array<!TemplateInstanceBase>}
+   * @type {?Array<!HTMLElement>}
    */
   _physicalItems: null,
 
@@ -102,14 +110,64 @@ export const ironList = {
   _lastVisibleIndexVal: null,
 
   /**
-   * The max number of pages to render. One page is equivalent to the height of the list.
+   * The max number of pages to render. One page is equivalent to the height of
+   * the list.
    */
   _maxPages: 2,
+
+  /**
+   * The currently focused physical item.
+   */
+  _focusedItem: null,
+
+  /**
+   * The virtual index of the focused item.
+   */
+  _focusedVirtualIndex: -1,
+
+  /**
+   * The physical index of the focused item.
+   */
+  _focusedPhysicalIndex: -1,
+
+  /**
+   * The the item that is focused if it is moved offscreen.
+   * @private {?HTMLElement}
+   */
+  _offscreenFocusedItem: null,
+
+  /**
+   * The item that backfills the `_offscreenFocusedItem` in the physical items
+   * list when that item is moved offscreen.
+   * @type {?HTMLElement}
+   */
+  _focusBackfillItem: null,
+
+  /**
+   * The maximum items per row
+   */
+  _itemsPerRow: 1,
+
+  /**
+   * The width of each grid item
+   */
+  _itemWidth: 0,
+
+  /**
+   * The height of the row in grid layout.
+   */
+  _rowHeight: 0,
 
   /**
    * The cost of stamping a template in ms.
    */
   _templateCost: 0,
+
+  /**
+   * Needed to pass event.model property to declarative event handlers -
+   * see polymer/polymer#4339.
+   */
+  _parentModel: true,
 
   /**
    * The bottom of the physical content.
@@ -136,7 +194,15 @@ export const ironList = {
    * The height of the physical content that isn't on the screen.
    */
   get _hiddenContentSize() {
-    return this._physicalSize - this._viewportHeight;
+    var size = this.grid ? this._physicalRows * this._rowHeight : this._physicalSize;
+    return size - this._viewportHeight;
+  },
+
+  /**
+   * The parent node for the _userTemplate.
+   */
+  get _itemsParent() {
+    return dom(dom(this._userTemplate).parentNode);
   },
 
   /**
@@ -147,14 +213,19 @@ export const ironList = {
   },
 
   /**
-   * The largest n-th value for an item such that it can be rendered in `_physicalStart`.
+   * The largest n-th value for an item such that it can be rendered in
+   * `_physicalStart`.
    */
   get _maxVirtualStart() {
-    return Math.max(0, this._virtualCount - this._physicalCount);
+    var virtualCount = this._convertIndexToCompleteRow(this._virtualCount);
+    return Math.max(0, virtualCount - this._physicalCount);
   },
 
   set _virtualStart(val) {
     val = this._clamp(val, 0, this._maxVirtualStart);
+    if (this.grid) {
+      val = val - (val % this._itemsPerRow);
+    }
     this._virtualStartVal = val;
   },
 
@@ -169,6 +240,9 @@ export const ironList = {
     val = val % this._physicalCount;
     if (val < 0) {
       val = this._physicalCount + val;
+    }
+    if (this.grid) {
+      val = val - (val % this._itemsPerRow);
     }
     this._physicalStartVal = val;
   },
@@ -207,7 +281,7 @@ export const ironList = {
    * True if the current list is visible.
    */
   get _isVisible() {
-    return Boolean(this.offsetHeight);
+    return Boolean(this.offsetWidth || this.offsetHeight);
   },
 
   /**
@@ -216,16 +290,20 @@ export const ironList = {
    * @type {number}
    */
   get firstVisibleIndex() {
-    let idx = this._firstVisibleIndexVal;
+    var idx = this._firstVisibleIndexVal;
     if (idx == null) {
-      let physicalOffset = this._physicalTop + this._scrollOffset;
+      var physicalOffset = this._physicalTop + this._scrollOffset;
 
       idx =
         this._iterateItems(function (pidx, vidx) {
-          physicalOffset += this._physicalSizes[pidx];
+          physicalOffset += this._getPhysicalSizeIncrement(pidx);
 
           if (physicalOffset > this._scrollPosition) {
-            return vidx;
+            return this.grid ? vidx - (vidx % this._itemsPerRow) : vidx;
+          }
+          // Handle a partially rendered final row in grid mode
+          if (this.grid && this._virtualCount - 1 === vidx) {
+            return vidx - (vidx % this._itemsPerRow);
           }
         }) || 0;
       this._firstVisibleIndexVal = idx;
@@ -239,31 +317,51 @@ export const ironList = {
    * @type {number}
    */
   get lastVisibleIndex() {
-    let idx = this._lastVisibleIndexVal;
+    var idx = this._lastVisibleIndexVal;
     if (idx == null) {
-      let physicalOffset = this._physicalTop + this._scrollOffset;
-      this._iterateItems(function (pidx, vidx) {
-        if (physicalOffset < this._scrollBottom) {
-          idx = vidx;
-        }
-        physicalOffset += this._physicalSizes[pidx];
-      });
+      if (this.grid) {
+        idx = Math.min(this._virtualCount, this.firstVisibleIndex + this._estRowsInView * this._itemsPerRow - 1);
+      } else {
+        var physicalOffset = this._physicalTop + this._scrollOffset;
+        this._iterateItems(function (pidx, vidx) {
+          if (physicalOffset < this._scrollBottom) {
+            idx = vidx;
+          }
+          physicalOffset += this._getPhysicalSizeIncrement(pidx);
+        });
+      }
       this._lastVisibleIndexVal = idx;
     }
     return idx;
   },
 
+  get _defaultScrollTarget() {
+    return this;
+  },
+
+  get _virtualRowCount() {
+    return Math.ceil(this._virtualCount / this._itemsPerRow);
+  },
+
+  get _estRowsInView() {
+    return Math.ceil(this._viewportHeight / this._rowHeight);
+  },
+
+  get _physicalRows() {
+    return Math.ceil(this._physicalCount / this._itemsPerRow);
+  },
+
   get _scrollOffset() {
-    return this._scrollerPaddingTop;
+    return this._scrollerPaddingTop + this.scrollOffset;
   },
 
   /**
    * Recycles the physical items when needed.
    */
   _scrollHandler: function () {
-    const scrollTop = Math.max(0, Math.min(this._maxScrollTop, this._scrollTop));
-    let delta = scrollTop - this._scrollPosition;
-    const isScrollingDown = delta >= 0;
+    var scrollTop = Math.max(0, Math.min(this._maxScrollTop, this._scrollTop));
+    var delta = scrollTop - this._scrollPosition;
+    var isScrollingDown = delta >= 0;
     // Track the current scroll position.
     this._scrollPosition = scrollTop;
     // Clear indexes for first and last visible indexes.
@@ -272,23 +370,31 @@ export const ironList = {
     // Random access.
     if (Math.abs(delta) > this._physicalSize && this._physicalSize > 0) {
       delta = delta - this._scrollOffset;
-      const idxAdjustment = Math.round(delta / this._physicalAverage);
+      var idxAdjustment = Math.round(delta / this._physicalAverage) * this._itemsPerRow;
       this._virtualStart = this._virtualStart + idxAdjustment;
       this._physicalStart = this._physicalStart + idxAdjustment;
-      // Estimate new physical offset.
-      this._physicalTop = Math.floor(this._virtualStart) * this._physicalAverage;
+      // Estimate new physical offset based on the virtual start index.
+      // adjusts the physical start position to stay in sync with the clamped
+      // virtual start index. It's critical not to let this value be
+      // more than the scroll position however, since that would result in
+      // the physical items not covering the viewport, and leading to
+      // _increasePoolIfNeeded to run away creating items to try to fill it.
+      this._physicalTop = Math.min(
+        Math.floor(this._virtualStart / this._itemsPerRow) * this._physicalAverage,
+        this._scrollPosition
+      );
       this._update();
     } else if (this._physicalCount > 0) {
-      const { physicalTop, indexes } = this._getReusables(isScrollingDown);
+      var reusables = this._getReusables(isScrollingDown);
       if (isScrollingDown) {
-        this._physicalTop = physicalTop;
-        this._virtualStart = this._virtualStart + indexes.length;
-        this._physicalStart = this._physicalStart + indexes.length;
+        this._physicalTop = reusables.physicalTop;
+        this._virtualStart = this._virtualStart + reusables.indexes.length;
+        this._physicalStart = this._physicalStart + reusables.indexes.length;
       } else {
-        this._virtualStart = this._virtualStart - indexes.length;
-        this._physicalStart = this._physicalStart - indexes.length;
+        this._virtualStart = this._virtualStart - reusables.indexes.length;
+        this._physicalStart = this._physicalStart - reusables.indexes.length;
       }
-      this._update(indexes, isScrollingDown ? null : indexes);
+      this._update(reusables.indexes, isScrollingDown ? null : reusables.indexes);
       this._debounce('_increasePoolIfNeeded', this._increasePoolIfNeeded.bind(this, 0), microTask);
     }
   },
@@ -300,27 +406,29 @@ export const ironList = {
    * @param {boolean} fromTop If the potential reusable items are above the scrolling region.
    */
   _getReusables: function (fromTop) {
-    let ith, offsetContent, physicalItemHeight;
-    const idxs = [];
-    const protectedOffsetContent = this._hiddenContentSize * this._ratio;
-    const virtualStart = this._virtualStart;
-    const virtualEnd = this._virtualEnd;
-    const physicalCount = this._physicalCount;
-    let top = this._physicalTop + this._scrollOffset;
-    const bottom = this._physicalBottom + this._scrollOffset;
-    const scrollTop = this._scrollTop;
-    const scrollBottom = this._scrollBottom;
+    var ith, lastIth, offsetContent, physicalItemHeight;
+    var idxs = [];
+    var protectedOffsetContent = this._hiddenContentSize * this._ratio;
+    var virtualStart = this._virtualStart;
+    var virtualEnd = this._virtualEnd;
+    var physicalCount = this._physicalCount;
+    var top = this._physicalTop + this._scrollOffset;
+    var bottom = this._physicalBottom + this._scrollOffset;
+    // This may be called outside of a scrollHandler, so use last cached position
+    var scrollTop = this._scrollPosition;
+    var scrollBottom = this._scrollBottom;
 
     if (fromTop) {
       ith = this._physicalStart;
+      lastIth = this._physicalEnd;
       offsetContent = scrollTop - top;
     } else {
       ith = this._physicalEnd;
+      lastIth = this._physicalStart;
       offsetContent = bottom - scrollBottom;
     }
-    // eslint-disable-next-line no-constant-condition
     while (true) {
-      physicalItemHeight = this._physicalSizes[ith];
+      physicalItemHeight = this._getPhysicalSizeIncrement(ith);
       offsetContent = offsetContent - physicalItemHeight;
       if (idxs.length >= physicalCount || offsetContent <= protectedOffsetContent) {
         break;
@@ -363,13 +471,14 @@ export const ironList = {
     if ((itemSet && itemSet.length === 0) || this._physicalCount === 0) {
       return;
     }
+    this._manageFocus();
     this._assignModels(itemSet);
     this._updateMetrics(itemSet);
     // Adjust offset after measuring.
     if (movingUp) {
       while (movingUp.length) {
-        const idx = movingUp.pop();
-        this._physicalTop -= this._physicalSizes[idx];
+        var idx = movingUp.pop();
+        this._physicalTop -= this._getPhysicalSizeIncrement(idx);
       }
     }
     this._positionItems();
@@ -388,27 +497,46 @@ export const ironList = {
    * Increases the pool size.
    */
   _increasePoolIfNeeded: function (count) {
-    const nextPhysicalCount = this._clamp(
+    var nextPhysicalCount = this._clamp(
       this._physicalCount + count,
       DEFAULT_PHYSICAL_COUNT,
       this._virtualCount - this._virtualStart
     );
-    const delta = nextPhysicalCount - this._physicalCount;
-    let nextIncrease = Math.round(this._physicalCount * 0.5);
+    nextPhysicalCount = this._convertIndexToCompleteRow(nextPhysicalCount);
+    if (this.grid) {
+      var correction = nextPhysicalCount % this._itemsPerRow;
+      if (correction && nextPhysicalCount - correction <= this._physicalCount) {
+        nextPhysicalCount += this._itemsPerRow;
+      }
+      nextPhysicalCount -= correction;
+    }
+    var delta = nextPhysicalCount - this._physicalCount;
+    var nextIncrease = Math.round(this._physicalCount * 0.5);
 
     if (delta < 0) {
       return;
     }
     if (delta > 0) {
-      const ts = window.performance.now();
+      var ts = window.performance.now();
       // Concat arrays in place.
       [].push.apply(this._physicalItems, this._createPool(delta));
-      // Push 0s into physicalSizes. Can't use Array.fill because IE11 doesn't support it.
-      for (let i = 0; i < delta; i++) {
+      // Push 0s into physicalSizes. Can't use Array.fill because IE11 doesn't
+      // support it.
+      for (var i = 0; i < delta; i++) {
         this._physicalSizes.push(0);
       }
       this._physicalCount = this._physicalCount + delta;
-
+      // Update the physical start if it needs to preserve the model of the
+      // focused item. In this situation, the focused item is currently rendered
+      // and its model would have changed after increasing the pool if the
+      // physical start remained unchanged.
+      if (
+        this._physicalStart > this._physicalEnd &&
+        this._isIndexRendered(this._focusedVirtualIndex) &&
+        this._getPhysicalIndex(this._focusedVirtualIndex) < this._physicalEnd
+      ) {
+        this._physicalStart = this._physicalStart + delta;
+      }
       this._update();
       this._templateCost = (window.performance.now() - ts) / delta;
       nextIncrease = Math.round(this._physicalCount * 0.5);
@@ -420,7 +548,8 @@ export const ironList = {
     } else if (!this._isClientFull()) {
       this._debounce('_increasePoolIfNeeded', this._increasePoolIfNeeded.bind(this, nextIncrease), microTask);
     } else if (this._physicalSize < this._optPhysicalSize) {
-      // Yield and increase the pool during idle time until the physical size is optimal.
+      // Yield and increase the pool during idle time until the physical size is
+      // optimal.
       this._debounce(
         '_increasePoolIfNeeded',
         this._increasePoolIfNeeded.bind(this, this._clamp(Math.round(50 / this._templateCost), 1, nextIncrease)),
@@ -437,11 +566,11 @@ export const ironList = {
       return;
     }
     if (this._physicalCount !== 0) {
-      const { physicalTop, indexes } = this._getReusables(true);
-      this._physicalTop = physicalTop;
-      this._virtualStart = this._virtualStart + indexes.length;
-      this._physicalStart = this._physicalStart + indexes.length;
-      this._update(indexes);
+      var reusables = this._getReusables(true);
+      this._physicalTop = reusables.physicalTop;
+      this._virtualStart = this._virtualStart + reusables.indexes.length;
+      this._physicalStart = this._physicalStart + reusables.indexes.length;
+      this._update(reusables.indexes);
       this._update();
       this._increasePoolIfNeeded(0);
     } else if (this._virtualCount > 0) {
@@ -449,6 +578,13 @@ export const ironList = {
       this.updateViewportBoundaries();
       this._increasePoolIfNeeded(DEFAULT_PHYSICAL_COUNT);
     }
+  },
+
+  _gridChanged: function (newGrid, oldGrid) {
+    if (typeof oldGrid === 'undefined') return;
+    this.notifyResize();
+    flush();
+    newGrid && this._updateGridMetrics();
   },
 
   /**
@@ -470,19 +606,45 @@ export const ironList = {
       if (this._scrollTop > this._scrollOffset) {
         this._resetScrollPosition(0);
       }
+      this._removeFocusedItem();
       this._debounce('_render', this._render, animationFrame);
+    } else if (change.path === 'items.splices') {
+      this._adjustVirtualIndex(change.value.indexSplices);
+      this._virtualCount = this.items ? this.items.length : 0;
+      // Only blur if at least one item is added or removed.
+      var itemAddedOrRemoved = change.value.indexSplices.some(function (splice) {
+        return splice.addedCount > 0 || splice.removed.length > 0;
+      });
+      if (itemAddedOrRemoved) {
+        // Only blur activeElement if it is a descendant of the list (#505,
+        // #507).
+        var activeElement = this._getActiveElement();
+        if (this.contains(activeElement)) {
+          activeElement.blur();
+        }
+      }
+      // Render only if the affected index is rendered.
+      var affectedIndexRendered = change.value.indexSplices.some(function (splice) {
+        return splice.index + splice.addedCount >= this._virtualStart && splice.index <= this._virtualEnd;
+      }, this);
+      if (!this._isClientFull() || affectedIndexRendered) {
+        this._debounce('_render', this._render, animationFrame);
+      }
+    } else if (change.path !== 'items.length') {
+      this._forwardItemPath(change.path, change.value);
     }
   },
 
   /**
    * Executes a provided function per every physical index in `itemSet`
-   * `itemSet` default value is equivalent to the entire set of physical indexes.
+   * `itemSet` default value is equivalent to the entire set of physical
+   * indexes.
    *
    * @param {!function(number, number)} fn
    * @param {!Array<number>=} itemSet
    */
   _iterateItems: function (fn, itemSet) {
-    let pidx, vidx, rtn, i;
+    var pidx, vidx, rtn, i;
 
     if (arguments.length === 2 && itemSet) {
       for (i = 0; i < itemSet.length; i++) {
@@ -531,20 +693,29 @@ export const ironList = {
     // so we can measure them.
     flush();
 
-    let newPhysicalSize = 0;
-    let oldPhysicalSize = 0;
-    const prevAvgCount = this._physicalAverageCount;
-    const prevPhysicalAvg = this._physicalAverage;
+    var newPhysicalSize = 0;
+    var oldPhysicalSize = 0;
+    var prevAvgCount = this._physicalAverageCount;
+    var prevPhysicalAvg = this._physicalAverage;
 
-    this._iterateItems(function (pidx) {
+    this._iterateItems(function (pidx, vidx) {
       oldPhysicalSize += this._physicalSizes[pidx];
       this._physicalSizes[pidx] = this._physicalItems[pidx].offsetHeight;
       newPhysicalSize += this._physicalSizes[pidx];
       this._physicalAverageCount += this._physicalSizes[pidx] ? 1 : 0;
     }, itemSet);
 
-    this._physicalSize = this._physicalSize + newPhysicalSize - oldPhysicalSize;
-
+    if (this.grid) {
+      this._updateGridMetrics();
+      this._physicalSize = Math.ceil(this._physicalCount / this._itemsPerRow) * this._rowHeight;
+    } else {
+      oldPhysicalSize =
+        this._itemsPerRow === 1
+          ? oldPhysicalSize
+          : Math.ceil(this._physicalCount / this._itemsPerRow) * this._rowHeight;
+      this._physicalSize = this._physicalSize + newPhysicalSize - oldPhysicalSize;
+      this._itemsPerRow = 1;
+    }
     // Update the average if it measured something.
     if (this._physicalAverageCount !== prevAvgCount) {
       this._physicalAverage = Math.round(
@@ -553,30 +724,85 @@ export const ironList = {
     }
   },
 
+  _updateGridMetrics: function () {
+    this._itemWidth = this._physicalCount > 0 ? this._physicalItems[0].getBoundingClientRect().width : 200;
+    this._rowHeight = this._physicalCount > 0 ? this._physicalItems[0].offsetHeight : 200;
+    this._itemsPerRow = this._itemWidth ? Math.floor(this._viewportWidth / this._itemWidth) : this._itemsPerRow;
+  },
+
   /**
    * Updates the position of the physical items.
    */
   _positionItems: function () {
     this._adjustScrollPosition();
 
-    let y = this._physicalTop;
+    var y = this._physicalTop;
 
-    this._iterateItems(function (pidx) {
-      this.translate3d(0, y + 'px', 0, this._physicalItems[pidx]);
-      y += this._physicalSizes[pidx];
-    });
+    if (this.grid) {
+      var totalItemWidth = this._itemsPerRow * this._itemWidth;
+      var rowOffset = (this._viewportWidth - totalItemWidth) / 2;
+
+      this._iterateItems(function (pidx, vidx) {
+        var modulus = vidx % this._itemsPerRow;
+        var x = Math.floor(modulus * this._itemWidth + rowOffset);
+        if (this._isRTL) {
+          x = x * -1;
+        }
+        this.translate3d(x + 'px', y + 'px', 0, this._physicalItems[pidx]);
+        if (this._shouldRenderNextRow(vidx)) {
+          y += this._rowHeight;
+        }
+      });
+    } else {
+      const order = [];
+      this._iterateItems(function (pidx, vidx) {
+        const item = this._physicalItems[pidx];
+        this.translate3d(0, y + 'px', 0, item);
+        y += this._physicalSizes[pidx];
+        const itemId = item.id;
+        if (itemId) {
+          order.push(itemId);
+        }
+      });
+      if (order.length) {
+        this.setAttribute('aria-owns', order.join(' '));
+      }
+    }
+  },
+
+  _getPhysicalSizeIncrement: function (pidx) {
+    if (!this.grid) {
+      return this._physicalSizes[pidx];
+    }
+    if (this._computeVidx(pidx) % this._itemsPerRow !== this._itemsPerRow - 1) {
+      return 0;
+    }
+    return this._rowHeight;
+  },
+
+  /**
+   * Returns, based on the current index,
+   * whether or not the next index will need
+   * to be rendered on a new row.
+   *
+   * @param {number} vidx Virtual index
+   * @return {boolean}
+   */
+  _shouldRenderNextRow: function (vidx) {
+    return vidx % this._itemsPerRow === this._itemsPerRow - 1;
   },
 
   /**
    * Adjusts the scroll position when it was overestimated.
    */
   _adjustScrollPosition: function () {
-    const deltaHeight =
+    var deltaHeight =
       this._virtualStart === 0 ? this._physicalTop : Math.min(this._scrollPosition + this._physicalTop, 0);
     // Note: the delta can be positive or negative.
     if (deltaHeight !== 0) {
       this._physicalTop = this._physicalTop - deltaHeight;
-      const scrollTop = this._scrollTop;
+      // This may be called outside of a scrollHandler, so use last cached position
+      var scrollTop = this._scrollPosition;
       // juking scroll position during interial scrolling on iOS is no bueno
       if (!IOS_TOUCH_SCROLLING && scrollTop > 0) {
         this._resetScrollPosition(scrollTop - deltaHeight);
@@ -600,11 +826,16 @@ export const ironList = {
    * @param {boolean=} forceUpdate If true, updates the height no matter what.
    */
   _updateScrollerSize: function (forceUpdate) {
-    this._estScrollHeight =
-      this._physicalBottom +
-      Math.max(this._virtualCount - this._physicalCount - this._virtualStart, 0) * this._physicalAverage;
+    if (this.grid) {
+      this._estScrollHeight = this._virtualRowCount * this._rowHeight;
+    } else {
+      this._estScrollHeight =
+        this._physicalBottom +
+        Math.max(this._virtualCount - this._physicalCount - this._virtualStart, 0) * this._physicalAverage;
+    }
     forceUpdate = forceUpdate || this._scrollHeight === 0;
     forceUpdate = forceUpdate || this._scrollPosition >= this._estScrollHeight - this._physicalSize;
+    forceUpdate = forceUpdate || (this.grid && this.$.items.style.height < this._estScrollHeight);
     // Amortize height adjustment, so it won't trigger large repaints too often.
     if (forceUpdate || Math.abs(this._estScrollHeight - this._scrollHeight) >= this._viewportHeight) {
       this.$.items.style.height = this._estScrollHeight + 'px';
@@ -631,20 +862,21 @@ export const ironList = {
     idx = this._clamp(idx, 0, this._virtualCount - 1);
     // Update the virtual start only when needed.
     if (!this._isIndexRendered(idx) || idx >= this._maxVirtualStart) {
-      this._virtualStart = idx - 1;
+      this._virtualStart = this.grid ? idx - this._itemsPerRow * 2 : idx - 1;
     }
+    this._manageFocus();
     this._assignModels();
     this._updateMetrics();
     // Estimate new physical offset.
-    this._physicalTop = Math.floor(this._virtualStart) * this._physicalAverage;
+    this._physicalTop = Math.floor(this._virtualStart / this._itemsPerRow) * this._physicalAverage;
 
-    let currentTopItem = this._physicalStart;
-    let currentVirtualItem = this._virtualStart;
-    let targetOffsetTop = 0;
-    const hiddenContentSize = this._hiddenContentSize;
+    var currentTopItem = this._physicalStart;
+    var currentVirtualItem = this._virtualStart;
+    var targetOffsetTop = 0;
+    var hiddenContentSize = this._hiddenContentSize;
     // scroll to the item as much as we can.
     while (currentVirtualItem < idx && targetOffsetTop <= hiddenContentSize) {
-      targetOffsetTop = targetOffsetTop + this._physicalSizes[currentTopItem];
+      targetOffsetTop = targetOffsetTop + this._getPhysicalSizeIncrement(currentTopItem);
       currentTopItem = (currentTopItem + 1) % this._physicalCount;
       currentVirtualItem++;
     }
@@ -676,9 +908,8 @@ export const ironList = {
         // clear cached visible index.
         this._firstVisibleIndexVal = null;
         this._lastVisibleIndexVal = null;
-        // Skip the resize event on touch devices when the address bar slides up.
-        this.updateViewportBoundaries();
         if (this._isVisible) {
+          this.updateViewportBoundaries();
           // Reinstall the scroll event listener.
           this.toggleScrollListener(true);
           this._resetAverage();
@@ -692,8 +923,207 @@ export const ironList = {
     );
   },
 
+  /**
+   * Updates the size of a given list item.
+   *
+   * @method updateSizeForItem
+   * @param {Object} item The item instance.
+   */
+  updateSizeForItem: function (item) {
+    return this.updateSizeForIndex(this.items.indexOf(item));
+  },
+
+  /**
+   * Updates the size of the item at the given index in the items array.
+   *
+   * @method updateSizeForIndex
+   * @param {number} index The index of the item in the items array.
+   */
+  updateSizeForIndex: function (index) {
+    if (!this._isIndexRendered(index)) {
+      return null;
+    }
+    this._updateMetrics([this._getPhysicalIndex(index)]);
+    this._positionItems();
+    return null;
+  },
+
+  /**
+   * Creates a temporary backfill item in the rendered pool of physical items
+   * to replace the main focused item. The focused item has tabIndex = 0
+   * and might be currently focused by the user.
+   *
+   * This dynamic replacement helps to preserve the focus state.
+   */
+  _manageFocus: function () {
+    var fidx = this._focusedVirtualIndex;
+
+    if (fidx >= 0 && fidx < this._virtualCount) {
+      // if it's a valid index, check if that index is rendered
+      // in a physical item.
+      if (this._isIndexRendered(fidx)) {
+        this._restoreFocusedItem();
+      } else {
+        this._createFocusBackfillItem();
+      }
+    } else if (this._virtualCount > 0 && this._physicalCount > 0) {
+      // otherwise, assign the initial focused index.
+      this._focusedPhysicalIndex = this._physicalStart;
+      this._focusedVirtualIndex = this._virtualStart;
+      this._focusedItem = this._physicalItems[this._physicalStart];
+    }
+  },
+
+  /**
+   * Converts a random index to the index of the item that completes it's row.
+   * Allows for better order and fill computation when grid == true.
+   */
+  _convertIndexToCompleteRow: function (idx) {
+    // when grid == false _itemPerRow can be unset.
+    this._itemsPerRow = this._itemsPerRow || 1;
+    return this.grid ? Math.ceil(idx / this._itemsPerRow) * this._itemsPerRow : idx;
+  },
+
   _isIndexRendered: function (idx) {
     return idx >= this._virtualStart && idx <= this._virtualEnd;
+  },
+
+  _isIndexVisible: function (idx) {
+    return idx >= this.firstVisibleIndex && idx <= this.lastVisibleIndex;
+  },
+
+  _getPhysicalIndex: function (vidx) {
+    return (this._physicalStart + (vidx - this._virtualStart)) % this._physicalCount;
+  },
+
+  focusItem: function (idx) {
+    this._focusPhysicalItem(idx);
+  },
+
+  _focusPhysicalItem: function (idx) {
+    if (idx < 0 || idx >= this._virtualCount) {
+      return;
+    }
+    this._restoreFocusedItem();
+    // scroll to index to make sure it's rendered
+    if (!this._isIndexRendered(idx)) {
+      this.scrollToIndex(idx);
+    }
+    var physicalItem = this._physicalItems[this._getPhysicalIndex(idx)];
+    var model = this.modelForElement(physicalItem);
+    var focusable;
+    // set a secret tab index
+    model.tabIndex = SECRET_TABINDEX;
+    // check if focusable element is the physical item
+    if (physicalItem.tabIndex === SECRET_TABINDEX) {
+      focusable = physicalItem;
+    }
+    // search for the element which tabindex is bound to the secret tab index
+    if (!focusable) {
+      focusable = dom(physicalItem).querySelector('[tabindex="' + SECRET_TABINDEX + '"]');
+    }
+    // restore the tab index
+    model.tabIndex = 0;
+    // focus the focusable element
+    this._focusedVirtualIndex = idx;
+    focusable && focusable.focus();
+  },
+
+  _removeFocusedItem: function () {
+    if (this._offscreenFocusedItem) {
+      this._itemsParent.removeChild(this._offscreenFocusedItem);
+    }
+    this._offscreenFocusedItem = null;
+    this._focusBackfillItem = null;
+    this._focusedItem = null;
+    this._focusedVirtualIndex = -1;
+    this._focusedPhysicalIndex = -1;
+  },
+
+  _createFocusBackfillItem: function () {
+    var fpidx = this._focusedPhysicalIndex;
+
+    if (this._offscreenFocusedItem || this._focusedVirtualIndex < 0) {
+      return;
+    }
+    if (!this._focusBackfillItem) {
+      // Create a physical item.
+      var inst = this.stamp(null);
+      this._focusBackfillItem = /** @type {!HTMLElement} */ (inst.root.querySelector('*'));
+      this._itemsParent.appendChild(inst.root);
+    }
+    // Set the offcreen focused physical item.
+    this._offscreenFocusedItem = this._physicalItems[fpidx];
+    this.modelForElement(this._offscreenFocusedItem).tabIndex = 0;
+    this._physicalItems[fpidx] = this._focusBackfillItem;
+    this._focusedPhysicalIndex = fpidx;
+    // Hide the focused physical.
+    this.translate3d(0, HIDDEN_Y, 0, this._offscreenFocusedItem);
+  },
+
+  _restoreFocusedItem: function () {
+    if (!this._offscreenFocusedItem || this._focusedVirtualIndex < 0) {
+      return;
+    }
+    // Assign models to the focused index.
+    this._assignModels();
+    // Get the new physical index for the focused index.
+    var fpidx = (this._focusedPhysicalIndex = this._getPhysicalIndex(this._focusedVirtualIndex));
+
+    var onScreenItem = this._physicalItems[fpidx];
+    if (!onScreenItem) {
+      return;
+    }
+    var onScreenInstance = this.modelForElement(onScreenItem);
+    var offScreenInstance = this.modelForElement(this._offscreenFocusedItem);
+    // Restores the physical item only when it has the same model
+    // as the offscreen one. Use key for comparison since users can set
+    // a new item via set('items.idx').
+    if (onScreenInstance[this.as] === offScreenInstance[this.as]) {
+      // Flip the focus backfill.
+      this._focusBackfillItem = onScreenItem;
+      onScreenInstance.tabIndex = -1;
+      // Restore the focused physical item.
+      this._physicalItems[fpidx] = this._offscreenFocusedItem;
+      // Hide the physical item that backfills.
+      this.translate3d(0, HIDDEN_Y, 0, this._focusBackfillItem);
+    } else {
+      this._removeFocusedItem();
+      this._focusBackfillItem = null;
+    }
+    this._offscreenFocusedItem = null;
+  },
+
+  _didFocus: function (e) {
+    var targetModel = this.modelForElement(e.target);
+    var focusedModel = this.modelForElement(this._focusedItem);
+    var hasOffscreenFocusedItem = this._offscreenFocusedItem !== null;
+    var fidx = this._focusedVirtualIndex;
+    if (!targetModel) {
+      return;
+    }
+    if (focusedModel === targetModel) {
+      // If the user focused the same item, then bring it into view if it's not
+      // visible.
+      if (!this._isIndexVisible(fidx)) {
+        this.scrollToIndex(fidx);
+      }
+    } else {
+      this._restoreFocusedItem();
+      // Restore tabIndex for the currently focused item.
+      if (focusedModel) {
+        focusedModel.tabIndex = -1;
+      }
+      // Set the tabIndex for the next focused item.
+      targetModel.tabIndex = 0;
+      fidx = targetModel[this.indexAs];
+      this._focusedVirtualIndex = fidx;
+      this._focusedPhysicalIndex = this._getPhysicalIndex(fidx);
+      this._focusedItem = this._physicalItems[this._focusedPhysicalIndex];
+      if (hasOffscreenFocusedItem && !this._offscreenFocusedItem) {
+        this._update();
+      }
+    }
   },
 
   _clamp: function (v, min, max) {
