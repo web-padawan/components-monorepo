@@ -1,6 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
+import { aTimeout, fixtureSync, nextFrame } from '@open-wc/testing-helpers';
 import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
 import '@polymer/polymer/lib/elements/dom-repeat.js';
 import {
@@ -52,10 +52,12 @@ describe('row details', () => {
 
   function openRowDetails(index) {
     grid.openItemDetails(grid._cache.items[index]);
+    flushGrid(grid);
   }
 
   function closeRowDetails(index) {
     grid.closeItemDetails(grid._cache.items[index]);
+    flushGrid(grid);
   }
 
   it('should not increase row update count', () => {
@@ -71,7 +73,7 @@ describe('row details', () => {
     grid.size = 1;
     grid.dataProvider = infiniteDataProvider;
     flushGrid(grid);
-    expect(spy.callCount).to.be.below(6);
+    expect(spy.callCount).to.be.below(5);
   });
 
   describe('simple', () => {
@@ -118,14 +120,6 @@ describe('row details', () => {
       expect(getRowCells(bodyRows[1])[1].hidden).to.be.true;
     });
 
-    it('should not update metrics or item positioning', () => {
-      const metricsSpy = sinon.spy(grid, '_updateMetrics');
-      const positionSpy = sinon.spy(grid, '_positionItems');
-      grid.openItemDetails({ nonExistentItem: true });
-      expect(metricsSpy.called).to.be.false;
-      expect(positionSpy.called).to.be.false;
-    });
-
     it('should close details row visually', () => {
       openRowDetails(1);
       closeRowDetails(1);
@@ -162,7 +156,11 @@ describe('row details', () => {
       openRowDetails(1);
       const cells = getRowCells(bodyRows[1]);
       cells[1].style.padding = '10px';
+      // Wait for the resize observer for details cell to invoke and change the row padding
       await nextFrame();
+      // Wait for the resize observer for virtualizer rows to invoke
+      await nextFrame();
+      await aTimeout(0);
       assertDetailsBounds();
     });
 

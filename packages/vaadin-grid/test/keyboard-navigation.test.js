@@ -17,7 +17,9 @@ import {
   getRowCells,
   infiniteDataProvider,
   listenOnce,
-  scrollToEnd
+  scrollToEnd,
+  getLastVisibleItem,
+  getPhysicalItems
 } from './helpers.js';
 import '../vaadin-grid.js';
 import '../vaadin-grid-column-group.js';
@@ -283,7 +285,7 @@ describe('keyboard navigation', () => {
     grid.style.width = '';
     grid.style.border = '';
 
-    if (grid.items[0] !== 'foo' || grid.items[1] !== 'bar') {
+    if (!grid.items || grid.items[0] !== 'foo' || grid.items[1] !== 'bar') {
       grid.size = undefined;
       grid.dataProvider = undefined;
       grid.items = ['foo', 'bar'];
@@ -1029,7 +1031,7 @@ describe('keyboard navigation', () => {
 
       ctrlEnd();
 
-      expect(grid.shadowRoot.activeElement.parentNode.index).to.equal(grid.items.length - 1);
+      expect(grid.shadowRoot.activeElement.parentNode.index).to.equal(grid.size - 1);
     });
 
     describe('horizontal scrolling', () => {
@@ -1069,6 +1071,7 @@ describe('keyboard navigation', () => {
         down();
         right();
 
+        flushGrid(grid);
         left();
 
         expect(grid.$.table.scrollLeft).to.equal(0);
@@ -1079,6 +1082,7 @@ describe('keyboard navigation', () => {
         down();
         right();
 
+        flushGrid(grid);
         left();
 
         expect(grid.$.table.scrollLeft).to.equal(0);
@@ -1088,6 +1092,7 @@ describe('keyboard navigation', () => {
         focusItem(0);
         grid.$.table.scrollLeft = 999999999;
 
+        flushGrid(grid);
         home();
 
         expect(grid.$.table.scrollLeft).to.equal(0);
@@ -1132,14 +1137,14 @@ describe('keyboard navigation', () => {
         grid.items = undefined;
         grid.size = 200;
         grid.dataProvider = infiniteDataProvider;
-        grid._scrollToIndex(0);
+        grid.scrollToIndex(0);
         flushGrid(grid);
         await nextFrame();
       });
 
       it('should scroll rows visible with up arrow', () => {
         focusItem(0);
-        grid._scrollToIndex(100);
+        grid.scrollToIndex(100);
 
         up();
 
@@ -1147,9 +1152,10 @@ describe('keyboard navigation', () => {
       });
 
       it('should scroll rows visible with down arrow', () => {
-        focusItem(grid._lastVisibleIndex);
+        focusItem(getLastVisibleItem(grid).index);
 
         down();
+        flushGrid(grid);
 
         expect(grid.$.table.scrollTop).to.be.above(0);
       });
@@ -1173,11 +1179,11 @@ describe('keyboard navigation', () => {
 
       it('should scroll down one page with page down', () => {
         focusItem(0);
-        const previousLastVisibleIndex = grid._lastVisibleIndex;
+        const previousLastVisibleIndex = getLastVisibleItem(grid).index;
 
         pageDown();
 
-        expect(grid._lastVisibleIndex).to.be.gt(1); // sanity check
+        expect(getLastVisibleItem(grid).index).to.be.gt(1); // sanity check
         expect(getFocusedRowIndex()).to.equal(previousLastVisibleIndex - 1);
       });
 
@@ -1199,6 +1205,8 @@ describe('keyboard navigation', () => {
         tab();
         tabToBody();
 
+        flushGrid(grid);
+
         expect(grid.$.table.scrollTop).to.equal(0);
       });
 
@@ -1206,14 +1214,14 @@ describe('keyboard navigation', () => {
         scrollToEnd(grid);
         getCell(grid, 0).focus();
         up();
+        flushGrid(grid);
 
-        let focusedRow = grid.$.items.children[getFocusedRowIndex()];
-        const focusedContent = getCellContent(getRowCells(focusedRow)[0]).textContent;
+        const focusedRowIndexBefore = getFocusedRowIndex();
 
         grid.size *= 2;
 
-        focusedRow = grid.$.items.children[getFocusedRowIndex()];
-        expect(getCellContent(getRowCells(focusedRow)[0]).textContent).to.equal(focusedContent);
+        const focusedRowIndexAfter = getFocusedRowIndex();
+        expect(focusedRowIndexBefore).to.equal(focusedRowIndexAfter);
       });
 
       it('should not focus a cell on size change if the focus is outside the body', () => {
@@ -1239,7 +1247,7 @@ describe('keyboard navigation', () => {
 
           expect(grid.hasAttribute('navigating')).to.be.true;
 
-          grid._scrollToIndex(100);
+          grid.scrollToIndex(100);
 
           expect(grid.hasAttribute('navigating')).to.be.false;
         });
@@ -1247,9 +1255,9 @@ describe('keyboard navigation', () => {
         it('should reveal navigation mode when a focused row is back on screen', () => {
           focusItem(0);
           right();
-          grid._scrollToIndex(100);
+          grid.scrollToIndex(100);
 
-          grid._scrollToIndex(0);
+          grid.scrollToIndex(0);
 
           expect(grid.hasAttribute('navigating')).to.be.true;
         });
@@ -1260,7 +1268,7 @@ describe('keyboard navigation', () => {
 
           expect(grid.hasAttribute('navigating')).to.be.true;
 
-          grid._scrollToIndex(100);
+          grid.scrollToIndex(100);
 
           expect(grid.hasAttribute('navigating')).to.be.true;
         });
