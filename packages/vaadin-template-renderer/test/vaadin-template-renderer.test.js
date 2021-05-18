@@ -11,20 +11,25 @@ import './fixtures/mock-component-slotted-host.js';
 
 describe('vaadin-template-renderer', () => {
   describe('basic', () => {
-    let component, template;
+    let component, template, renderer;
 
     beforeEach(() => {
       component = fixtureSync(`
-        <mock-component>
+        <mock-component manual-render>
           <template>foo</template>
         </mock-component>
       `);
 
       template = component.querySelector('template');
+      renderer = component.renderer;
     });
 
-    it('should render the template', () => {
-      expect(component.$.content.textContent).to.equal('foo');
+    it('should attach templatizer instance to the template', () => {
+      expect(template.__templatizer).to.be.instanceOf(Templatizer);
+    });
+
+    it('should attach templatizer instance to the renderer', () => {
+      expect(renderer.__templatizer).to.be.instanceOf(Templatizer);
     });
 
     it('should process the template only once', () => {
@@ -38,7 +43,15 @@ describe('vaadin-template-renderer', () => {
       expect(newTemplatizer).to.equal(oldTemplatizer);
     });
 
+    it('should render the template', () => {
+      component.render();
+
+      expect(component.$.content.textContent).to.equal('foo');
+    });
+
     it('should preserve the template instance when re-rendering', () => {
+      component.render();
+
       const oldTemplateInstance = component.$.content.__templateInstance;
 
       component.render();

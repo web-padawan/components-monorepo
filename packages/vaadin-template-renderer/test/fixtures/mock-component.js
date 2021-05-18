@@ -17,7 +17,14 @@ export class MockComponent extends HTMLElement {
 
   set renderer(renderer) {
     this.__renderer = renderer;
-    this.render();
+
+    if (!this.getAttribute('manual-render')) {
+      this.render();
+    }
+  }
+
+  get renderer() {
+    return this.__renderer;
   }
 
   render() {

@@ -6,10 +6,14 @@ import { Templatizer } from './vaadin-template-renderer-templatizer.js';
 function createRenderer(template) {
   const templatizer = Templatizer.create(template);
 
-  return (root, _owner, model) => {
-    template.__templatizer = templatizer;
-    template.__templatizer.render(root, model);
+  const renderer = (root, _owner, model) => {
+    templatizer.render(root, model);
   };
+
+  template.__templatizer = templatizer;
+  renderer.__templatizer = templatizer;
+
+  return renderer;
 }
 
 function processTemplate(component, template) {
