@@ -7,10 +7,10 @@ dotenv.config();
 
 // if DRY_RUN then no actual changes are made
 const DRY_RUN = process.env.PRODUCTION_RUN !== 'true';
+console.log(DRY_RUN ? `DRY_RUN: no actuall changes will be made` : `PRODUCTION_RUN: making changes for real`);
 
-// if TEST_ON_SINGLE_ISSUE then only the special test issue is affected
-// (see https://github.com/vaadin/magi-cli/issues/142)
-const TEST_ON_SINGLE_ISSUE = process.env.TEST_ON_SINGLE_ISSUE === 'true';
+// stop after processing ISSUE_LIMIT issues
+const ISSUE_LIMIT = +process.env.ISSUE_LIMIT || Number.MAX_SAFE_INTEGER;
 
 // GitHub API client (both REST and GraphQL)
 const octokit = new Octokit({ auth: process.env.GITHUB_API_TOKEN });
@@ -24,82 +24,36 @@ const zhApi = axios.create({
   adapter: zhRateLimitingAdapter(axios.defaults.adapter)
 });
 
-// The packages listed here will be skipped by this script.
-// All issues opened in that repos will remain untouched.
-const EXCLUDED_PACKAGES = [
-  // do not exclude even though it's managed by the CE team
-  // https://vaadin.slack.com/archives/C01MHLE0FN3/p1621246586005600
-  // 'vaadin-messages'
-];
-
 // All open issues from the source repos will be transferred to _this_ repo:
 const TARGET_REPO = {
   name: 'web-components',
   owner: 'vaadin'
 };
 
-// moslty useful for testing to limit the scope when running this script
-let shouldExcludeIssue = () => false;
-if (TEST_ON_SINGLE_ISSUE) {
-  // Run a small-scale test with a signle issue only
-  // That issue was created specifically for testing this script
-  shouldExcludeIssue = (issue) => {
-    return issue.title !== 'Test issue for the tansfer-issue script';
-  };
-}
-
-// moslty useful for testing to limit the scope when running this script
-let shouldExcludeRepo = () => false;
-if (TEST_ON_SINGLE_ISSUE) {
-  // Run a small-scale test with a signle issue only
-  // That issue was created specifically for testing this script
-  shouldExcludeRepo = (repo) => {
-    return repo.full_name !== 'vaadin/magi-cli';
-  };
-}
-
 async function getSourceReposList() {
   const packages = await fs.readdir('packages');
-  if (TEST_ON_SINGLE_ISSUE) {
-    packages.push('magi-cli', 'web-components');
-  }
+  packages.push('vaadin', 'vaadin-core');
 
   const repos = await Promise.all(
-    packages
-      .filter((package) => {
-        const skip = EXCLUDED_PACKAGES.indexOf(package) > -1;
-        if (skip) {
-          console.log(`Skipped the package ${package} as it's in the skip list`);
+    packages.map(async (package) => {
+      try {
+        const { data: repo } = await octokit.rest.repos.get({
+          owner: 'vaadin',
+          repo: package
+        });
+        return repo;
+      } catch (e) {
+        if (!!e.constructor && e.constructor.name === 'RequestError' && e.status === 404) {
+          console.log(`Skipped the package ${package} as it has no separate repo`);
+          return;
+        } else {
+          throw e;
         }
-        return !skip;
-      })
-      .map(async (package) => {
-        try {
-          const { data: repo } = await octokit.rest.repos.get({
-            owner: 'vaadin',
-            repo: package
-          });
-          return repo;
-        } catch (e) {
-          if (!!e.constructor && e.constructor.name === 'RequestError' && e.status === 404) {
-            console.log(`Skipped the package ${package} as it has no separate repo`);
-            return;
-          } else {
-            throw e;
-          }
-        }
-      })
+      }
+    })
   );
 
-  return repos
-    .filter((repo) => !!repo) // remove skipped packages from the list
-    .filter((repo) => {
-      const skip = shouldExcludeRepo(repo);
-      if (skip) {
-        console.log(`Skipped the repo ${repo.full_name} because the shouldExcludeRepo() filter returned true`);
-      }
-      return !skip;
-    });
+  return repos.filter((repo) => !!repo); // remove skipped packages from the list
 }
 
 const zhWorkspaceNameById = new Map();
@@ -314,17 +268,23 @@ async function main() {
 
       // iterate through each page of issues
       for await (const { data: issues } of iterator) {
+        // stop processing when reached the issue limit
+        if (totalIssueCount >= ISSUE_LIMIT) {
+          break;
+        }
         // iterate through each issue in a page
         for (const issue of issues) {
-          // do not transfer open PRs
+          // ignore open PRs
           if (issue.html_url.indexOf('/pull/') > -1) {
             continue;
           }
 
-          if (shouldExcludeIssue(issue)) {
-            console.log(`Skipping ${repo.name}#${issue.number} because the shouldExcludeIssue() filter returned true`);
-            continue;
+          // stop processing when reached the issue limit
+          if (totalIssueCount >= ISSUE_LIMIT) {
+            console.log(`stoppig because reached the ISSUE_LIMIT (${ISSUE_LIMIT})`);
+            break;
           }
+          totalIssueCount += 1;
 
           const [{ data: labels }, zhIssue] = await Promise.all([
             // fetch all labels on the issue
@@ -365,14 +325,18 @@ async function main() {
 
           // add the original repo name as an extra label on the transferred issue
           // (but use the 'theme' label for styles issues)
-          labels.push(
-            ['vaadin-lumo-styles', 'vaadin-material-styles'].indexOf(repo.name) > -1
-              ? { name: 'theme', color: '5319E7', description: '' }
-              : { name: repo.name, color: 'eeeeee', description: '' }
-          );
+          if (['vaadin', 'vaadin-core'].indexOf(repo.name) === -1) {
+            labels.push(
+              ['vaadin-lumo-styles', 'vaadin-material-styles'].indexOf(repo.name) > -1
+                ? { name: 'theme', color: '5319E7', description: '' }
+                : { name: repo.name, color: 'eeeeee', description: '' }
+            );
+          }
 
-          await Promise.all(labels.map(targetRepoLabels.ensure));
-          await transferLabels(labels, transferredIssue);
+          if (labels.length > 0) {
+            await Promise.all(labels.map(targetRepoLabels.ensure));
+            await transferLabels(labels, transferredIssue);
+          }
 
           if (zhIssue.pipelines.length > 0) {
             await transferZhPipelines(
@@ -420,11 +384,10 @@ async function main() {
       }
 
       console.log(`total issues in the ${repo.name} repo: ${issueCount}`);
-      totalIssueCount += issueCount;
     })
   );
 
-  console.log(`total issues in all repos combined: ${totalIssueCount}`);
+  console.log(`total issues processed (in all repos combined): ${totalIssueCount}`);
   console.log(`total ZenHub Epics skipped in all repos combined: ${totalZhEpics}`);
   console.log(`total issues with ZenHub estimates in all repos combined: ${totalIssuesWithZhEstimate}`);
   console.timeEnd(`issues`);
