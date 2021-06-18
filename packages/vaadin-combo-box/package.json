@@ -25,7 +25,6 @@
   ],
   "dependencies": {
     "@polymer/iron-a11y-announcer": "^3.0.0",
-    "@polymer/iron-list": "^3.0.0",
     "@polymer/iron-resizable-behavior": "^3.0.0",
     "@polymer/polymer": "^3.0.0",
     "@vaadin/vaadin-control-state-mixin": "^21.0.0-alpha8",
@@ -35,7 +34,8 @@
     "@vaadin/vaadin-material-styles": "^21.0.0-alpha8",
     "@vaadin/vaadin-overlay": "^21.0.0-alpha8",
     "@vaadin/vaadin-text-field": "^21.0.0-alpha8",
-    "@vaadin/vaadin-themable-mixin": "^21.0.0-alpha8"
+    "@vaadin/vaadin-themable-mixin": "^21.0.0-alpha8",
+    "@vaadin/vaadin-virtual-list": "^21.0.0-alpha8"
   },
   "devDependencies": {
     "@esm-bundle/chai": "4.3.0",
