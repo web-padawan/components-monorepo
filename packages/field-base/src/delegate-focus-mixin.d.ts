@@ -3,6 +3,8 @@
  * Copyright (c) 2021 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
+import { DisabledMixin } from './disabled-mixin.js';
+import { FocusMixin } from './focus-mixin.js';
 
 /**
  * A mixin to forward focus to an element in the light DOM.
@@ -13,7 +15,7 @@ interface DelegateFocusMixinConstructor {
   new (...args: any[]): DelegateFocusMixin;
 }
 
-interface DelegateFocusMixin {
+interface DelegateFocusMixin extends DisabledMixin, FocusMixin {
   /**
    * Any element extending this mixin is required to implement this getter.
    * It returns the actual focusable element in the component.

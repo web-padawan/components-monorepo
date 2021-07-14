@@ -3,6 +3,8 @@
  * Copyright (c) 2021 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
+import { FieldAriaMixin } from './field-aria-mixin.js';
+import { InputPropsMixin } from './input-props-mixin.js';
 
 /**
  * A mixin to provide logic for vaadin-text-field and related components.
@@ -13,7 +15,7 @@ interface InputFieldMixinConstructor {
   new (...args: any[]): InputFieldMixin;
 }
 
-interface InputFieldMixin {
+interface InputFieldMixin extends FieldAriaMixin, InputPropsMixin {
   readonly inputElement: HTMLElement | undefined;
 
   /**

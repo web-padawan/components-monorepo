@@ -3,6 +3,7 @@
  * Copyright (c) 2021 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
+import { InputFieldMixin } from './input-field-mixin.js';
 
 /**
  * A mixin to provide validation constraints for vaadin-text-field and related components.
@@ -13,7 +14,7 @@ interface TextFieldMixinConstructor {
   new (...args: any[]): TextFieldMixin;
 }
 
-interface TextFieldMixin {
+interface TextFieldMixin extends InputFieldMixin {
   /**
    * Maximum number of characters (in Unicode code points) that the user can enter.
    */

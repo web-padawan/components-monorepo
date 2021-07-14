@@ -3,6 +3,7 @@
  * Copyright (c) 2021 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
+import { SlotMixin } from './slot-mixin.js';
 
 /**
  * A mixin to provide helper text via corresponding property or named slot.
@@ -13,7 +14,7 @@ interface HelperTextMixinConstructor {
   new (...args: any[]): HelperTextMixin;
 }
 
-interface HelperTextMixin {
+interface HelperTextMixin extends SlotMixin {
   /**
    * String used for the helper text.
    */
