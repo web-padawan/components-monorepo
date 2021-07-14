@@ -11,6 +11,7 @@ customElements.define(
       return html`
         <slot name="label"></slot>
         <slot name="input"></slot>
+        <button id="clearButton">Clear</button>
         <slot name="error-message"></slot>
         <slot name="helper"></slot>
       `;

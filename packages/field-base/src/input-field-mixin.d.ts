@@ -3,6 +3,8 @@
  * Copyright (c) 2021 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
+import { ClearButtonMixin } from './clear-button-mixin.js';
+import { DelegateFocusMixin } from './delegate-focus-mixin.js';
 import { FieldAriaMixin } from './field-aria-mixin.js';
 import { InputPropsMixin } from './input-props-mixin.js';
 
@@ -15,7 +17,7 @@ interface InputFieldMixinConstructor {
   new (...args: any[]): InputFieldMixin;
 }
 
-interface InputFieldMixin extends FieldAriaMixin, InputPropsMixin {
+interface InputFieldMixin extends ClearButtonMixin, DelegateFocusMixin, FieldAriaMixin, InputPropsMixin {
   readonly inputElement: HTMLElement | undefined;
 
   /**

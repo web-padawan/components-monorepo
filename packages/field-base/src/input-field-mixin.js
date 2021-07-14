@@ -4,11 +4,13 @@
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 import { dedupingMixin } from '@polymer/polymer/lib/utils/mixin.js';
+import { ClearButtonMixin } from './clear-button-mixin.js';
+import { DelegateFocusMixin } from './delegate-focus-mixin.js';
 import { FieldAriaMixin } from './field-aria-mixin.js';
 import { InputPropsMixin } from './input-props-mixin.js';
 
 const InputFieldMixinImplementation = (superclass) =>
-  class InputFieldMixinClass extends FieldAriaMixin(InputPropsMixin(superclass)) {
+  class InputFieldMixinClass extends ClearButtonMixin(FieldAriaMixin(InputPropsMixin(DelegateFocusMixin(superclass)))) {
     static get properties() {
       return {
         /**
@@ -78,6 +80,10 @@ const InputFieldMixinImplementation = (superclass) =>
      * @protected
      */
     get inputElement() {
+      return this._inputNode;
+    }
+
+    get focusElement() {
       return this._inputNode;
     }
 
