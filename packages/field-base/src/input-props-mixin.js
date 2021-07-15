@@ -32,12 +32,19 @@ const InputPropsMixinImplementation = (superclass) =>
           type: Boolean,
           value: false,
           reflectToAttribute: true
+        },
+
+        /**
+         * The text usually displayed in a tooltip popup when the mouse is over the field.
+         */
+        title: {
+          type: String
         }
       };
     }
 
     static get hostProps() {
-      return ['name', 'placeholder', 'readonly', 'required', 'invalid'];
+      return ['name', 'placeholder', 'readonly', 'required', 'invalid', 'title'];
     }
 
     /** @protected */
@@ -46,7 +53,7 @@ const InputPropsMixinImplementation = (superclass) =>
 
       if (this._inputNode) {
         // Propagate initially defined properties to the slotted input
-        this._propagateHostAttributes(this.constructor.hostProps.map((attr) => this[attr]));
+        this._propagateHostAttributes(this.constructor.hostProps.map((attr) => this[attr] || this.getAttribute(attr)));
       }
     }
 

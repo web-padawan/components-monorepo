@@ -30,6 +30,11 @@ interface InputPropsMixin extends InputAriaMixin, ValidateMixin {
    * When present, it specifies that the field is read-only.
    */
   readonly: boolean;
+
+  /**
+   * The text usually displayed in a tooltip popup when the mouse is over the field.
+   */
+  title: string;
 }
 
 export { InputPropsMixinConstructor, InputPropsMixin };

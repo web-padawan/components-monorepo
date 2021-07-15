@@ -31,6 +31,22 @@ describe('input-props-mixin', () => {
     });
   });
 
+  describe('title', () => {
+    beforeEach(() => {
+      element = fixtureSync('<input-props-mixin-element title="foo"></input-props-mixin-element>');
+      input = element.querySelector('[slot=input]');
+    });
+
+    it('should propagate title attribute to the input', () => {
+      expect(input.title).to.equal('foo');
+    });
+
+    it('should propagate title property to the input', () => {
+      element.title = 'bar';
+      expect(input.title).to.equal('bar');
+    });
+  });
+
   describe('placeholder', () => {
     beforeEach(() => {
       element = fixtureSync('<input-props-mixin-element placeholder="foo"></input-props-mixin-element>');
