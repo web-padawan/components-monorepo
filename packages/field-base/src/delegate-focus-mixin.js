@@ -9,6 +9,17 @@ import { DisabledMixin } from './disabled-mixin.js';
 
 const DelegateFocusMixinImplementation = (superclass) =>
   class DelegateFocusMixinClass extends FocusMixin(DisabledMixin(superclass)) {
+    static get properties() {
+      return {
+        /**
+         * Specify that this control should have input focus when the page loads.
+         */
+        autofocus: {
+          type: Boolean
+        }
+      };
+    }
+
     /**
      * Any element extending this mixin is required to implement this getter.
      * It returns the actual focusable element in the component.
@@ -17,6 +28,19 @@ const DelegateFocusMixinImplementation = (superclass) =>
     get focusElement() {
       console.warn(`Please implement the 'focusElement' property in <${this.localName}>`);
       return null;
+    }
+
+    /** @protected */
+    ready() {
+      super.ready();
+
+      if (this.autofocus && !this.disabled) {
+        requestAnimationFrame(() => {
+          this.focusElement.focus();
+          this._setFocused(true);
+          this.setAttribute('focus-ring', '');
+        });
+      }
     }
 
     focus() {
