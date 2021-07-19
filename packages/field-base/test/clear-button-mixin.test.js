@@ -66,7 +66,7 @@ describe('clear-button-mixin', () => {
 
   it('should dispatch change event on clear button click', () => {
     const spy = sinon.spy();
-    input.addEventListener('change', spy);
+    element.addEventListener('change', spy);
     button.click();
     expect(spy.calledOnce).to.be.true;
   });
