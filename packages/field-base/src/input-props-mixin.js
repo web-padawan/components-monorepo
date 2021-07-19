@@ -44,7 +44,7 @@ const InputPropsMixinImplementation = (superclass) =>
     }
 
     static get hostProps() {
-      return ['name', 'placeholder', 'readonly', 'required', 'invalid', 'title'];
+      return ['name', 'type', 'placeholder', 'readonly', 'required', 'invalid', 'title'];
     }
 
     /** @protected */
