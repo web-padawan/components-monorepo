@@ -11,7 +11,7 @@ customElements.define(
       return html`
         <slot name="label"></slot>
         <slot name="error-message"></slot>
-        <slot name="helper-text"></slot>
+        <slot name="helper"></slot>
       `;
     }
   }
@@ -24,7 +24,7 @@ customElements.define(
       return html`
         <slot name="label"></slot>
         <slot name="error-message"></slot>
-        <slot name="helper-text"></slot>
+        <slot name="helper"></slot>
       `;
     }
 
