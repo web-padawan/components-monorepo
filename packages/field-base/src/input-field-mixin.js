@@ -3,6 +3,8 @@
  * Copyright (c) 2021 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
+import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
+import { animationFrame } from '@polymer/polymer/lib/utils/async.js';
 import { dedupingMixin } from '@polymer/polymer/lib/utils/mixin.js';
 import { ClearButtonMixin } from './clear-button-mixin.js';
 import { DelegateFocusMixin } from './delegate-focus-mixin.js';
@@ -70,6 +72,10 @@ const InputFieldMixinImplementation = (superclass) =>
       return [...super.hostProps, 'autocapitalize', 'autocomplete', 'autocorrect'];
     }
 
+    static get observers() {
+      return ['__observeOffsetHeight(errorMessage, invalid, label, helperText)'];
+    }
+
     /** @protected */
     get _ariaTarget() {
       return this._inputNode;
@@ -117,6 +123,17 @@ const InputFieldMixinImplementation = (superclass) =>
       if (this._inputNode) {
         this._removeInputListeners(this._inputNode);
       }
+    }
+
+    /** @protected */
+    ready() {
+      super.ready();
+
+      // Lumo theme defines a max-height transition for the "error-message"
+      // part on invalid state change.
+      this.shadowRoot.querySelector('[part="error-message"]').addEventListener('transitionend', () => {
+        this.__observeOffsetHeight();
+      });
     }
 
     /**
@@ -183,6 +200,27 @@ const InputFieldMixinImplementation = (superclass) =>
 
       this.value = e.target.value;
       this.__userInput = false;
+    }
+
+    /** @private */
+    __dispatchIronResizeEventIfNeeded(prop, value) {
+      const oldSize = '__previous' + prop;
+      if (this[oldSize] !== undefined && this[oldSize] !== value) {
+        this.dispatchEvent(new CustomEvent('iron-resize', { bubbles: true, composed: true }));
+      }
+
+      this[oldSize] = value;
+    }
+
+    /** @private */
+    __observeOffsetHeight() {
+      this.__observeOffsetHeightDebouncer = Debouncer.debounce(
+        this.__observeOffsetHeightDebouncer,
+        animationFrame,
+        () => {
+          this.__dispatchIronResizeEventIfNeeded('Height', this.offsetHeight);
+        }
+      );
     }
 
     /** @private */
