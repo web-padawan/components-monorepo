@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { fixtureSync } from '@vaadin/testing-helpers';
+import { fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
 import { HelperTextMixin } from '../src/helper-text-mixin.js';
 
@@ -98,6 +98,39 @@ describe('helper-text-mixin', () => {
     });
 
     it('should update slotted helper content on property change', () => {
+      element.helperText = '3 digits';
+      expect(helper.textContent).to.equal('3 digits');
+    });
+  });
+
+  describe('lazy', () => {
+    beforeEach(async () => {
+      element = fixtureSync('<helper-text-mixin-element></helper-text-mixin-element>');
+      await nextFrame();
+      helper = document.createElement('div');
+      helper.setAttribute('slot', 'helper');
+      helper.textContent = 'Lazy';
+      element.appendChild(helper);
+    });
+
+    it('should return lazy helper content as a helperText', () => {
+      expect(element.helperText).to.equal('Lazy');
+    });
+
+    it('should store a reference to the lazily added helper', () => {
+      expect(element._helperNode).to.equal(helper);
+    });
+
+    it('should set id on the lazily added helper element', () => {
+      const idRegex = /^helper-helper-text-mixin-element-\d+$/;
+      expect(idRegex.test(helper.getAttribute('id'))).to.be.true;
+    });
+
+    it('should set has-helper attribute with lazy helper', () => {
+      expect(element.hasAttribute('has-helper')).to.be.true;
+    });
+
+    it('should update lazy helper content on property change', () => {
       element.helperText = '3 digits';
       expect(helper.textContent).to.equal('3 digits');
     });

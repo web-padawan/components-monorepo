@@ -57,6 +57,29 @@ const HelperTextMixinImplementation = (superclass) =>
     }
 
     /** @protected */
+    ready() {
+      super.ready();
+
+      this.__helperSlot = this.shadowRoot.querySelector('[name="helper"]');
+      this.__helperSlot.addEventListener('slotchange', this._onHelperSlotChange.bind(this));
+    }
+
+    /** @private */
+    _onHelperSlotChange() {
+      // Check fot slotted element node that is not the one created by this mixin.
+      const helperNodes = this.__helperSlot
+        .assignedNodes({ flatten: true })
+        .filter((node) => node.nodeType === Node.ELEMENT_NODE);
+
+      const customHelper = helperNodes.find((node) => node !== this._helperNode);
+      if (customHelper) {
+        customHelper.id = this._helperId;
+        this._helperNode.remove();
+        this._applyCustomHelper();
+      }
+    }
+
+    /** @protected */
     _applyCustomHelper() {
       const helper = this._helperNode.textContent;
       if (helper !== this.helperText) {
